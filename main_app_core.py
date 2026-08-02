@@ -2648,8 +2648,6 @@ if os.path.exists(SETLIST_FILE):
                 "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想",
             ]
         )
-        _private_tab_placeholder = st.empty()
-        tab5 = tab7 = tab10 = tab15 = _private_tab_placeholder.container()
     else:
         tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs(
             [
@@ -3766,34 +3764,35 @@ if os.path.exists(SETLIST_FILE):
         else:
             st.warning("⚠️ `songs.csv` に「衣装」を表す列が見つかりません。")
 
-    # TAB 5: ランダムガチャ
-    with tab5:
-        render_page_header(
-            "🎲",
-            "今日のおすすめライブガチャ",
-            "現在の分析対象から、見返したい一曲・一公演をランダムに提案します。",
-        )
+    if not PUBLIC_MODE:
+        # TAB 5: ランダムガチャ
+        with tab5:
+            render_page_header(
+                "🎲",
+                "今日のおすすめライブガチャ",
+                "現在の分析対象から、見返したい一曲・一公演をランダムに提案します。",
+            )
 
-        gacha_df = df.copy()
-        if exclude_talk_events:
-            gacha_df = gacha_df[~gacha_df["楽曲名"].astype(str).str.contains("トークのみ", na=False)]
+            gacha_df = df.copy()
+            if exclude_talk_events:
+                gacha_df = gacha_df[~gacha_df["楽曲名"].astype(str).str.contains("トークのみ", na=False)]
 
-        if st.button("✨ ガチャを回す！", key="btn_gacha", type="primary") and len(gacha_df) > 0:
-            st.session_state.gacha_result = gacha_df.sample(n=1).iloc[0]
-            st.balloons()
+            if st.button("✨ ガチャを回す！", key="btn_gacha", type="primary") and len(gacha_df) > 0:
+                st.session_state.gacha_result = gacha_df.sample(n=1).iloc[0]
+                st.balloons()
 
-        if "gacha_result" in st.session_state:
-            g_row = st.session_state.gacha_result
-            st.markdown("---")
-            st.subheader("🎉 本日のおすすめパフォーマンス！")
+            if "gacha_result" in st.session_state:
+                g_row = st.session_state.gacha_result
+                st.markdown("---")
+                st.subheader("🎉 本日のおすすめパフォーマンス！")
 
-            gc1, gc2, gc3 = st.columns(3)
-            gc1.metric("🎵 楽曲名", str(g_row.get("楽曲名", "-")), delta=str(g_row.get("ユニット", "")), delta_color="normal")
-            gc2.metric("🏟️ 公演名", str(g_row.get("公演名", "-")), delta=str(g_row.get("日付", "")), delta_color="normal")
-            gc3.metric("👗 着用衣装", str(g_row.get("衣装", "-")))
+                gc1, gc2, gc3 = st.columns(3)
+                gc1.metric("🎵 楽曲名", str(g_row.get("楽曲名", "-")), delta=str(g_row.get("ユニット", "")), delta_color="normal")
+                gc2.metric("🏟️ 公演名", str(g_row.get("公演名", "-")), delta=str(g_row.get("日付", "")), delta_color="normal")
+                gc3.metric("👗 着用衣装", str(g_row.get("衣装", "-")))
 
-            st.markdown(f"**🎤 歌唱キャスト/アイドル:** {g_row.get('歌唱者', '-')}")
-            render_gacha_context_images()
+                st.markdown(f"**🎤 歌唱キャスト/アイドル:** {g_row.get('歌唱者', '-')}")
+                render_gacha_context_images()
 
     # TAB 6: データ検索・全データ
     with tab6:
@@ -3875,899 +3874,900 @@ if os.path.exists(SETLIST_FILE):
             }
         )
 
-    # TAB 7: 新規データ＆各種マスタ登録フォーム（全項目網羅版）
-    with tab7:
-        render_page_header(
-            "➕",
-            "データ管理",
-            "よく使う登録は専用フォームから、細かな修正はCSV編集から行えます。保存前に内容を確認できます。",
-        )
-        register_modes = [
-            "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
-            "👗 衣装マスタ追加",
-            "🎵 アルバム・楽曲マスタ追加",
-            "👤 アイドル・キャストを追加",
-            "🃏 カード・シナリオ実装を登録",
-            "📝 楽曲の分類・歌詞・公式リンクを登録",
-            "🖼️ ジャケット情報を登録",
-            "👥 出演・参加履歴をまとめて登録",
-            "🗃️ 全CSVを追加・編集",
-        ]
-        if st.session_state.get("tab7_register_mode") not in register_modes:
-            st.session_state["tab7_register_mode"] = register_modes[0]
-        st.caption("登録するデータを選択")
-        register_mode_buttons = st.columns(3)
-        for index, mode_name in enumerate(register_modes):
-            with register_mode_buttons[index % 3]:
-                if st.button(
-                    mode_name,
-                    key=f"tab7_register_mode_button_{index}",
-                    type="primary" if st.session_state["tab7_register_mode"] == mode_name else "secondary",
-                    use_container_width=True,
-                ):
-                    st.session_state["tab7_register_mode"] = mode_name
-                    st.rerun()
-        register_mode = st.session_state["tab7_register_mode"]
-
-        st.markdown("---")
-
-        if register_mode == "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録":
-            st.subheader("🎤 新公演セットリスト ＆ 公演マスタ同時登録")
-            
-            if "num_songs_to_add" not in st.session_state:
-                st.session_state.num_songs_to_add = 1
-
-            requested_song_rows = st.number_input(
-                "個別入力する曲数",
-                min_value=1,
-                max_value=40,
-                value=st.session_state.num_songs_to_add,
-                step=1,
-                help="下の個別入力欄の数です。まとめて貼り付ける場合は1のままで大丈夫です。",
+    if not PUBLIC_MODE:
+        # TAB 7: 新規データ＆各種マスタ登録フォーム（全項目網羅版）
+        with tab7:
+            render_page_header(
+                "➕",
+                "データ管理",
+                "よく使う登録は専用フォームから、細かな修正はCSV編集から行えます。保存前に内容を確認できます。",
             )
-            if requested_song_rows != st.session_state.num_songs_to_add:
-                st.session_state.num_songs_to_add = requested_song_rows
-                st.rerun()
-
-            event_casts = st.multiselect(
-                "この公演の出演者（先に選ぶと各楽曲で候補を絞り込めます）",
-                options=cast_list,
-                key="setlist_event_casts",
-                help="合同・外部ライブでは、ここで選んだ出演者に加えて各楽曲で「その他」も選べます。",
-            )
-
-            with st.form("add_individual_songs_form"):
-                st.markdown("##### 🏟️ 公演情報（公演マスター `events.csv` にも自動登録されます）")
-                fc1, fc2, fc3, fc4 = st.columns(4)
-                with fc1: input_date = st.date_input("日付 *", datetime.now().date())
-                with fc2: input_live_name = st.text_input("公演名 *（例: 7thLIVE DAY1）")
-                with fc3: input_event_type = st.selectbox("公演区分 *", ["キャストライブ", "XR", "発売記念イベント", "合同", "外部", "その他"])
-                with fc4: input_venue_name = st.text_input("会場（例: Kアリーナ横浜）")
-
-                st.markdown("---")
-                st.markdown("##### 🎵 セットリスト楽曲情報")
-                bulk_setlist_text = st.text_area(
-                    "まとめて貼り付け（任意）",
-                    placeholder=(
-                        "曲順 | 楽曲名 | ユニット | 歌唱者 | 衣装\n"
-                        "1 | Spread the Wings!! | シャイニーカラーズ | 関根瞳;近藤玲奈 | ビヨンドザブルースカイ\n"
-                        "※ タブ区切りでも入力できます。貼り付けた行は個別入力欄に追加して保存されます。"
-                    ),
-                    height=150,
-                )
-                
-                # キャスト/アイドル選択補助
-                available_members = unique_in_registered_order(event_casts + cast_list + idol_list) if (cast_list or idol_list) else []
-                unit_options_for_setlist = ["（指定なし）"] + unique_in_registered_order(group_to_casts_map.keys())
-
-                songs_input_data = []
-                for i in range(st.session_state.num_songs_to_add):
-                    st.write(f"**🎵 {i+1} 曲目**")
-                    rc1, rc2, rc3, rc4, rc5 = st.columns([1, 3, 2, 3, 3])
-                    with rc1: order_val = st.text_input("曲順", value=str(i + 1), key=f"ord_{i}")
-                    with rc2: song_val = st.text_input("楽曲名 *", key=f"sng_{i}", placeholder="例: Spread the Wings!!")
-                    with rc3:
-                        selected_unit = st.selectbox(
-                            "ユニット",
-                            unit_options_for_setlist,
-                            key=f"unt_{i}",
-                        )
-                        unit_val = "" if selected_unit == "（指定なし）" else selected_unit
-                    
-                    with rc4:
-                        if available_members:
-                            unit_members = group_to_casts_map.get(unit_val, [])
-                            # 全体曲は、公演出演者を初期候補にする。
-                            if unit_val == "シャイニーカラーズ":
-                                unit_members = event_casts
-                            allowed_singers = unique_in_registered_order(event_casts + unit_members)
-                            if not allowed_singers:
-                                allowed_singers = available_members
-                            singer_options = unique_in_registered_order(allowed_singers + ["その他"])
-                            multiselect_singers = st.multiselect(
-                                "歌唱者（複数選択）",
-                                options=singer_options,
-                                default=[name for name in unit_members if name in singer_options],
-                                key=f"sgr_multi_{i}_{make_search_key(unit_val) or 'none'}",
-                            )
-                            singer_text_extra = st.text_input("その他の歌唱者（任意）", key=f"sgr_txt_{i}", placeholder="外部出演者など")
-                            all_singers_combined = ";".join(multiselect_singers)
-                            if singer_text_extra.strip():
-                                manual_singers = [
-                                    name.strip()
-                                    for name in re.split(r"[;；・]", singer_text_extra)
-                                    if name.strip()
-                                ]
-                                all_singers_combined = ";".join(
-                                    [name for name in [all_singers_combined, *manual_singers] if name]
-                                )
-                            singer_val = all_singers_combined
-                        else:
-                            singer_val = st.text_input("歌唱者", key=f"sgr_{i}", placeholder="例: 関根瞳・近藤玲奈・峯田茉優")
-
-                    with rc5: costume_val = st.text_input("衣装", key=f"cst_{i}", placeholder="例: ビヨンドザブルースカイ")
-
-                    songs_input_data.append(
-                        {"曲順": order_val, "楽曲名": song_val, "ユニット": unit_val, "歌唱者": singer_val, "衣装": costume_val}
-                    )
-
-                if bulk_setlist_text.strip():
-                    for line_index, raw_line in enumerate(bulk_setlist_text.splitlines(), start=1):
-                        raw_line = raw_line.strip()
-                        if not raw_line or raw_line.startswith("#"):
-                            continue
-                        parts = [part.strip() for part in re.split(r"[|\t]", raw_line)]
-                        if len(parts) < 2:
-                            continue
-                        parts += [""] * (5 - len(parts))
-                        songs_input_data.append(
-                            {
-                                "曲順": parts[0] or str(line_index),
-                                "楽曲名": parts[1],
-                                "ユニット": parts[2],
-                                "歌唱者": parts[3],
-                                "衣装": parts[4],
-                            }
-                        )
-
-                # ユニットを指定した曲で歌唱者が未選択なら、所属キャストを自動補完する。
-                # シャイニーカラーズの全体曲は、この公演で選んだ出演者を使う。
-                for row in songs_input_data:
-                    if str(row.get("歌唱者", "")).strip():
-                        continue
-                    row_unit = str(row.get("ユニット", "")).strip()
-                    if row_unit == "シャイニーカラーズ":
-                        automatic_singers = event_casts
-                    else:
-                        automatic_singers = group_to_casts_map.get(row_unit, [])
-                    if automatic_singers:
-                        row["歌唱者"] = ";".join(automatic_singers)
-
-                if st.form_submit_button("🚀 セットリスト＆公演マスタを一括保存"):
-                    if not input_live_name.strip():
-                        st.error("⚠️ 公演名を入力してください。")
-                    else:
-                        formatted_date = input_date.strftime("%Y/%m/%d")
-                        clean_event_title = clean_live_name(input_live_name)
-                        
-                        # 1. 公演マスター (events.csv) への一括追加処理
-                        new_ev_row = [
-                            {
-                                "日付": formatted_date,
-                                "公演名": clean_event_title,
-                                "会場": input_venue_name.strip(),
-                                "公演区分": input_event_type,
-                            }
-                        ]
-                        append_csv_rows(
-                            EVENT_MASTER_FILE,
-                            new_ev_row,
-                            ["日付", "公演名", "会場", "公演区分"],
-                        )
-
-                        # 2. セットリスト (songs.csv) への保存処理
-                        valid_songs = [
-                            {
-                                "日付": formatted_date,
-                                "公演名": clean_event_title,
-                                "曲順": r["曲順"],
-                                "楽曲名": r["楽曲名"],
-                                "ユニット": r["ユニット"],
-                                "歌唱者": r["歌唱者"],
-                                "衣装": r["衣装"],
-                            }
-                            for r in songs_input_data if r["楽曲名"].strip()
-                        ]
-
-                        if valid_songs:
-                            append_csv_rows(
-                                SETLIST_FILE,
-                                valid_songs,
-                                ["曲順", "日付", "公演名", "楽曲名", "ユニット", "歌唱者", "衣装"],
-                            )
-                            st.success(f"🎉 公演「{clean_event_title}」のマスタ情報およびセットリスト ({len(valid_songs)} 曲) を一括保存しました！(F5キーで最新情報に更新)")
-                        else:
-                            st.warning("⚠️ 公演マスタは追加されましたが、有効な楽曲名が入力されていないためセットリストは保存されませんでした。")
-
-        elif register_mode == "👗 衣装マスタ追加":
-            st.subheader("👗 新規衣装マスタ追加 (`costumes.csv`)")
-            with st.form("add_costume_form"):
-                c1, c2 = st.columns(2)
-                with c1:
-                    new_costume_name = st.text_input("衣装名（必須） *")
-                    new_costume_series = st.text_input("シリーズ（例: 7thLIVE / ソンフォプリズム）")
-                with c2:
-                    new_costume_unit = st.text_input("対象ユニット/キャラ（例: ストレイライト / 共通）")
-                    new_costume_type = st.selectbox("衣装区分", ["共通衣装", "ユニット衣装", "個装", "その他"])
-
-                if st.form_submit_button("💾 衣装マスタへ保存"):
-                    if not new_costume_name.strip():
-                        st.error("⚠️ 衣装名を入力してください。")
-                    else:
-                        new_c_row = pd.DataFrame(
-                            [
-                                {
-                                    "衣装": new_costume_name.strip(),
-                                    "シリーズ": new_costume_series.strip(),
-                                    "ユニット/キャラ": new_costume_unit.strip(),
-                                    "衣装区分": new_costume_type,
-                                }
-                            ]
-                        )
-                        append_csv_rows(
-                            COSTUME_MASTER_FILE,
-                            new_c_row.to_dict("records"),
-                            ["衣装", "シリーズ", "ユニット/キャラ", "衣装区分"],
-                        )
-                        st.success(f"🎉 衣装「{new_costume_name}」を保存しました！(F5キーで最新情報に更新)")
-
-        elif register_mode == "🎵 アルバム・楽曲マスタ追加":
-            st.subheader("🎵 新規アルバム＆楽曲マスタ追加 (`albums.csv` / `songs_albums.csv`)")
-            with st.form("add_album_form"):
-                ac1, ac2 = st.columns(2)
-                with ac1:
-                    new_album_name = st.text_input("アルバム・CD名（例: CANVAS 01） *")
-                    new_series_name = st.text_input("アルバムシリーズ（例: CANVAS）")
-                with ac2:
-                    new_release_date = st.date_input("発売日", datetime.now().date())
-                    new_album_singer = st.text_input("歌唱者（収録曲共通・任意）", placeholder="例: シャイニーカラーズ")
-                    new_album_songs = st.text_area("収録楽曲リスト（1行に1曲ずつ入力）")
-
-                if st.form_submit_button("💾 アルバム＆楽曲マスタへ保存"):
-                    if not new_album_name.strip():
-                        st.error("⚠️ アルバム名を入力してください。")
-                    else:
-                        new_alb_row = [
-                            {
-                                "アルバム名": new_album_name.strip(),
-                                "アルバムシリーズ": new_series_name.strip(),
-                            }
-                        ]
-                        append_csv_rows(
-                            ALBUM_MASTER_FILE,
-                            new_alb_row,
-                            ["アルバム名", "アルバムシリーズ"],
-                        )
-
-                        song_lines = [s.strip() for s in new_album_songs.split("\n") if s.strip()]
-                        if song_lines:
-                            sa_df_old = load_csv(SONG_ALBUM_FILE) if os.path.exists(SONG_ALBUM_FILE) else pd.DataFrame()
-                            if "Column 7" in sa_df_old.columns:
-                                song_numbers = pd.to_numeric(sa_df_old["Column 7"], errors="coerce")
-                                next_song_number = int(song_numbers.max()) + 1 if song_numbers.notna().any() else 1
-                            else:
-                                next_song_number = 1
-
-                            new_sa_rows = [
-                                {
-                                    "Column 7": next_song_number + index,
-                                    "楽曲名": song_name,
-                                    "アルバム": new_album_name.strip(),
-                                    "リリース日": new_release_date.strftime("%Y/%m/%d"),
-                                    "歌唱者": new_album_singer.strip(),
-                                }
-                                for index, song_name in enumerate(song_lines)
-                            ]
-                            append_csv_rows(
-                                SONG_ALBUM_FILE,
-                                new_sa_rows,
-                                ["Column 7", "楽曲名", "アルバム", "リリース日", "歌唱者"],
-                            )
-
-                        st.success(f"🎉 アルバム「{new_album_name}」と収録楽曲 ({len(song_lines)}曲) を保存しました！(F5キーで最新情報に更新)")
-
-        elif register_mode == "👤 アイドル・キャストを追加":
-            st.subheader("👤 アイドル・キャストを追加")
-            st.caption("新しいアイドル・キャストや、企画ユニットの所属を追加します。すでに登録済みのキャラ名は内容を更新します。")
-            with st.form("add_idol_form"):
-                member_col1, member_col2 = st.columns(2)
-                with member_col1:
-                    new_idol_name = st.text_input("キャラ名 *")
-                    existing_unit = st.text_input("既存ユニット")
-                    refrac7ions_unit = st.text_input("PJ: REFRAC7IONS")
-                with member_col2:
-                    new_cast_name = st.text_input("キャスト名 *")
-                    team_unit = st.text_input("Team.")
-                    master_showpiece_unit = st.text_input("-Master ShowPiece-")
-                halloween_unit = st.text_input("ハロウィン")
-                if st.form_submit_button("💾 アイドル・キャストを保存", type="primary"):
-                    if not new_idol_name.strip() or not new_cast_name.strip():
-                        st.error("⚠️ キャラ名とキャスト名を入力してください。")
-                    else:
-                        upsert_csv_row(
-                            IDOL_MASTER_FILE,
-                            {
-                                "キャラ": new_idol_name.strip(),
-                                "キャスト": new_cast_name.strip(),
-                                "既存ユニット": existing_unit.strip(),
-                                "PJ: REFRAC7IONS": refrac7ions_unit.strip(),
-                                "Team.": team_unit.strip(),
-                                "-Master ShowPiece-": master_showpiece_unit.strip(),
-                                "ハロウィン": halloween_unit.strip(),
-                            },
-                            ["キャラ", "キャスト", "既存ユニット", "PJ: REFRAC7IONS", "Team.", "-Master ShowPiece-", "ハロウィン"],
-                            ["キャラ"],
-                        )
-                        st.success(f"🎉 「{new_idol_name.strip()}」を保存しました。")
+            register_modes = [
+                "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
+                "👗 衣装マスタ追加",
+                "🎵 アルバム・楽曲マスタ追加",
+                "👤 アイドル・キャストを追加",
+                "🃏 カード・シナリオ実装を登録",
+                "📝 楽曲の分類・歌詞・公式リンクを登録",
+                "🖼️ ジャケット情報を登録",
+                "👥 出演・参加履歴をまとめて登録",
+                "🗃️ 全CSVを追加・編集",
+            ]
+            if st.session_state.get("tab7_register_mode") not in register_modes:
+                st.session_state["tab7_register_mode"] = register_modes[0]
+            st.caption("登録するデータを選択")
+            register_mode_buttons = st.columns(3)
+            for index, mode_name in enumerate(register_modes):
+                with register_mode_buttons[index % 3]:
+                    if st.button(
+                        mode_name,
+                        key=f"tab7_register_mode_button_{index}",
+                        type="primary" if st.session_state["tab7_register_mode"] == mode_name else "secondary",
+                        use_container_width=True,
+                    ):
+                        st.session_state["tab7_register_mode"] = mode_name
                         st.rerun()
+            register_mode = st.session_state["tab7_register_mode"]
 
-        elif register_mode == "🃏 カード・シナリオ実装を登録":
-            st.subheader("🃏 カード・シナリオ実装を登録")
-            st.caption(
-                "カードは P/S を指定します。P/S以外の名称はシナリオとして登録し、カレンダーでもカードとは分けて表示します。"
-            )
-            card_entry_buttons = st.columns(2)
-            if "card_entry_mode" not in st.session_state:
-                st.session_state["card_entry_mode"] = "カード"
-            with card_entry_buttons[0]:
-                if st.button("🃏 カード", key="card_entry_card_button", use_container_width=True,
-                             type="primary" if st.session_state["card_entry_mode"] == "カード" else "secondary"):
-                    st.session_state["card_entry_mode"] = "カード"
+            st.markdown("---")
+
+            if register_mode == "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録":
+                st.subheader("🎤 新公演セットリスト ＆ 公演マスタ同時登録")
+            
+                if "num_songs_to_add" not in st.session_state:
+                    st.session_state.num_songs_to_add = 1
+
+                requested_song_rows = st.number_input(
+                    "個別入力する曲数",
+                    min_value=1,
+                    max_value=40,
+                    value=st.session_state.num_songs_to_add,
+                    step=1,
+                    help="下の個別入力欄の数です。まとめて貼り付ける場合は1のままで大丈夫です。",
+                )
+                if requested_song_rows != st.session_state.num_songs_to_add:
+                    st.session_state.num_songs_to_add = requested_song_rows
                     st.rerun()
-            with card_entry_buttons[1]:
-                if st.button("🎬 シナリオ・コミュ", key="card_entry_scenario_button", use_container_width=True,
-                             type="primary" if st.session_state["card_entry_mode"] == "シナリオ・コミュ" else "secondary"):
-                    st.session_state["card_entry_mode"] = "シナリオ・コミュ"
-                    st.rerun()
-            card_entry_mode = st.session_state["card_entry_mode"]
 
-            if card_entry_mode == "カード":
-                card_game_label, card_ps_label = st.columns([1, 1])
-                with card_game_label:
-                    st.caption("作品")
-                    if "card_game" not in st.session_state:
-                        st.session_state["card_game"] = "シャニマス"
-                    game_buttons = st.columns(2)
-                    for index, game_name in enumerate(["シャニマス", "シャニソン"]):
-                        if game_buttons[index].button(
-                            game_name,
-                            key=f"card_game_{game_name}",
-                            use_container_width=True,
-                            type="primary" if st.session_state["card_game"] == game_name else "secondary",
-                        ):
-                            st.session_state["card_game"] = game_name
-                            st.rerun()
-                    card_game = st.session_state["card_game"]
-                with card_ps_label:
-                    st.caption("P/S")
-                    ps_buttons = st.columns(2)
-                    if "card_ps" not in st.session_state:
-                        st.session_state["card_ps"] = "P"
-                    with ps_buttons[0]:
-                        if st.button("P", key="card_ps_p", use_container_width=True,
-                                     type="primary" if st.session_state["card_ps"] == "P" else "secondary"):
-                            st.session_state["card_ps"] = "P"
-                            st.rerun()
-                    with ps_buttons[1]:
-                        if st.button("S", key="card_ps_s", use_container_width=True,
-                                     type="primary" if st.session_state["card_ps"] == "S" else "secondary"):
-                            st.session_state["card_ps"] = "S"
-                            st.rerun()
-                card_ps = st.session_state["card_ps"]
-                with st.form("add_card_implementation_form"):
-                    card_common_date = st.date_input(
-                        "実装日 *",
-                        datetime.now().date(),
-                        key="card_common_date",
-                    )
-                    card_col1, card_col2 = st.columns(2)
-                    with card_col1:
-                        card_idol_name = st.selectbox(
-                            "アイドル",
-                            idol_list if idol_list else [""],
-                            key="card_idol_name",
-                        )
-                        selected_member_color = MEMBER_COLOR_MAP.get(card_idol_name)
-                        if selected_member_color:
-                            st.markdown(
-                                f"<span style='display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;'>"
-                                f"<span style='width:1rem;height:1rem;border-radius:50%;background:{selected_member_color};border:1px solid #777;'></span>"
-                                f"イメージカラー {selected_member_color}</span>",
-                                unsafe_allow_html=True,
-                            )
-                        card_rarity = st.selectbox(
-                            "レア度",
-                            ["SSR", "SR", "R", "UR", "N", "その他"],
-                        )
-                    with card_col2:
-                        card_name = st.text_input("カード名")
-                        card_source = st.selectbox(
-                            "入手方法",
-                            [
-                                "恒常", "限定", "イベント", "配布", "トワコレ",
-                                "マイコレ", "パラコレ", "ガシャ特典", "ライブ",
-                                "誕生日ガシャ", "その他",
-                            ],
-                        )
+                event_casts = st.multiselect(
+                    "この公演の出演者（先に選ぶと各楽曲で候補を絞り込めます）",
+                    options=cast_list,
+                    key="setlist_event_casts",
+                    help="合同・外部ライブでは、ここで選んだ出演者に加えて各楽曲で「その他」も選べます。",
+                )
 
-                    st.markdown("##### まとめて貼り付ける場合")
-                    bulk_card_text = st.text_area(
-                        "1行に「アイドル｜P/S｜レア度｜カード名｜入手方法」。日付は上の実装日を共通で使用します。",
+                with st.form("add_individual_songs_form"):
+                    st.markdown("##### 🏟️ 公演情報（公演マスター `events.csv` にも自動登録されます）")
+                    fc1, fc2, fc3, fc4 = st.columns(4)
+                    with fc1: input_date = st.date_input("日付 *", datetime.now().date())
+                    with fc2: input_live_name = st.text_input("公演名 *（例: 7thLIVE DAY1）")
+                    with fc3: input_event_type = st.selectbox("公演区分 *", ["キャストライブ", "XR", "発売記念イベント", "合同", "外部", "その他"])
+                    with fc4: input_venue_name = st.text_input("会場（例: Kアリーナ横浜）")
+
+                    st.markdown("---")
+                    st.markdown("##### 🎵 セットリスト楽曲情報")
+                    bulk_setlist_text = st.text_area(
+                        "まとめて貼り付け（任意）",
                         placeholder=(
-                            "櫻木真乃 | P | SSR | 【カード名】 | 限定\n"
-                            "風野灯織 | S | SR | 【カード名】 | イベント"
+                            "曲順 | 楽曲名 | ユニット | 歌唱者 | 衣装\n"
+                            "1 | Spread the Wings!! | シャイニーカラーズ | 関根瞳;近藤玲奈 | ビヨンドザブルースカイ\n"
+                            "※ タブ区切りでも入力できます。貼り付けた行は個別入力欄に追加して保存されます。"
                         ),
                         height=150,
                     )
-                    save_card_rows = st.form_submit_button(
-                        "💾 カード実装を保存",
-                        type="primary",
-                    )
+                
+                    # キャスト/アイドル選択補助
+                    available_members = unique_in_registered_order(event_casts + cast_list + idol_list) if (cast_list or idol_list) else []
+                    unit_options_for_setlist = ["（指定なし）"] + unique_in_registered_order(group_to_casts_map.keys())
 
-                if save_card_rows:
-                    implementation_date = card_common_date.strftime("%Y/%m/%d")
-                    card_rows_to_save = []
-                    if card_name.strip():
-                        card_rows_to_save.append(
-                            {
-                                "アイドル": card_idol_name,
-                                "作品": card_game,
-                                "P/S": card_ps,
-                                "レア度": card_rarity,
-                                "カード名": card_name.strip(),
-                                "入手": card_source,
-                                "実装日": implementation_date,
-                            }
-                        )
-                    for raw_line in bulk_card_text.splitlines():
-                        parts = [
-                            part.strip()
-                            for part in re.split(r"[|｜\t]", raw_line)
-                        ]
-                        if len(parts) < 4:
-                            continue
-                        parts += [""] * (5 - len(parts))
-                        if parts[1] not in {"P", "S"}:
-                            continue
-                        card_rows_to_save.append(
-                            {
-                                "アイドル": parts[0],
-                                "作品": card_game,
-                                "P/S": parts[1],
-                                "レア度": parts[2],
-                                "カード名": parts[3],
-                                "入手": parts[4],
-                                "実装日": implementation_date,
-                            }
+                    songs_input_data = []
+                    for i in range(st.session_state.num_songs_to_add):
+                        st.write(f"**🎵 {i+1} 曲目**")
+                        rc1, rc2, rc3, rc4, rc5 = st.columns([1, 3, 2, 3, 3])
+                        with rc1: order_val = st.text_input("曲順", value=str(i + 1), key=f"ord_{i}")
+                        with rc2: song_val = st.text_input("楽曲名 *", key=f"sng_{i}", placeholder="例: Spread the Wings!!")
+                        with rc3:
+                            selected_unit = st.selectbox(
+                                "ユニット",
+                                unit_options_for_setlist,
+                                key=f"unt_{i}",
+                            )
+                            unit_val = "" if selected_unit == "（指定なし）" else selected_unit
+                    
+                        with rc4:
+                            if available_members:
+                                unit_members = group_to_casts_map.get(unit_val, [])
+                                # 全体曲は、公演出演者を初期候補にする。
+                                if unit_val == "シャイニーカラーズ":
+                                    unit_members = event_casts
+                                allowed_singers = unique_in_registered_order(event_casts + unit_members)
+                                if not allowed_singers:
+                                    allowed_singers = available_members
+                                singer_options = unique_in_registered_order(allowed_singers + ["その他"])
+                                multiselect_singers = st.multiselect(
+                                    "歌唱者（複数選択）",
+                                    options=singer_options,
+                                    default=[name for name in unit_members if name in singer_options],
+                                    key=f"sgr_multi_{i}_{make_search_key(unit_val) or 'none'}",
+                                )
+                                singer_text_extra = st.text_input("その他の歌唱者（任意）", key=f"sgr_txt_{i}", placeholder="外部出演者など")
+                                all_singers_combined = ";".join(multiselect_singers)
+                                if singer_text_extra.strip():
+                                    manual_singers = [
+                                        name.strip()
+                                        for name in re.split(r"[;；・]", singer_text_extra)
+                                        if name.strip()
+                                    ]
+                                    all_singers_combined = ";".join(
+                                        [name for name in [all_singers_combined, *manual_singers] if name]
+                                    )
+                                singer_val = all_singers_combined
+                            else:
+                                singer_val = st.text_input("歌唱者", key=f"sgr_{i}", placeholder="例: 関根瞳・近藤玲奈・峯田茉優")
+
+                        with rc5: costume_val = st.text_input("衣装", key=f"cst_{i}", placeholder="例: ビヨンドザブルースカイ")
+
+                        songs_input_data.append(
+                            {"曲順": order_val, "楽曲名": song_val, "ユニット": unit_val, "歌唱者": singer_val, "衣装": costume_val}
                         )
 
-                    if not card_rows_to_save:
-                        st.error("カード名を入力するか、まとめ入力を貼り付けてください。")
-                    else:
-                        saved_count = upsert_csv_rows(
-                            CARD_FILE,
-                            card_rows_to_save,
-                            ["アイドル", "作品", "P/S", "レア度", "カード名", "入手", "実装日"],
-                            ["アイドル", "P/S", "カード名", "実装日"],
-                        )
-                        st.success(f"{saved_count}件のカード実装を保存しました。")
+                    if bulk_setlist_text.strip():
+                        for line_index, raw_line in enumerate(bulk_setlist_text.splitlines(), start=1):
+                            raw_line = raw_line.strip()
+                            if not raw_line or raw_line.startswith("#"):
+                                continue
+                            parts = [part.strip() for part in re.split(r"[|\t]", raw_line)]
+                            if len(parts) < 2:
+                                continue
+                            parts += [""] * (5 - len(parts))
+                            songs_input_data.append(
+                                {
+                                    "曲順": parts[0] or str(line_index),
+                                    "楽曲名": parts[1],
+                                    "ユニット": parts[2],
+                                    "歌唱者": parts[3],
+                                    "衣装": parts[4],
+                                }
+                            )
+
+                    # ユニットを指定した曲で歌唱者が未選択なら、所属キャストを自動補完する。
+                    # シャイニーカラーズの全体曲は、この公演で選んだ出演者を使う。
+                    for row in songs_input_data:
+                        if str(row.get("歌唱者", "")).strip():
+                            continue
+                        row_unit = str(row.get("ユニット", "")).strip()
+                        if row_unit == "シャイニーカラーズ":
+                            automatic_singers = event_casts
+                        else:
+                            automatic_singers = group_to_casts_map.get(row_unit, [])
+                        if automatic_singers:
+                            row["歌唱者"] = ";".join(automatic_singers)
+
+                    if st.form_submit_button("🚀 セットリスト＆公演マスタを一括保存"):
+                        if not input_live_name.strip():
+                            st.error("⚠️ 公演名を入力してください。")
+                        else:
+                            formatted_date = input_date.strftime("%Y/%m/%d")
+                            clean_event_title = clean_live_name(input_live_name)
+                        
+                            # 1. 公演マスター (events.csv) への一括追加処理
+                            new_ev_row = [
+                                {
+                                    "日付": formatted_date,
+                                    "公演名": clean_event_title,
+                                    "会場": input_venue_name.strip(),
+                                    "公演区分": input_event_type,
+                                }
+                            ]
+                            append_csv_rows(
+                                EVENT_MASTER_FILE,
+                                new_ev_row,
+                                ["日付", "公演名", "会場", "公演区分"],
+                            )
+
+                            # 2. セットリスト (songs.csv) への保存処理
+                            valid_songs = [
+                                {
+                                    "日付": formatted_date,
+                                    "公演名": clean_event_title,
+                                    "曲順": r["曲順"],
+                                    "楽曲名": r["楽曲名"],
+                                    "ユニット": r["ユニット"],
+                                    "歌唱者": r["歌唱者"],
+                                    "衣装": r["衣装"],
+                                }
+                                for r in songs_input_data if r["楽曲名"].strip()
+                            ]
+
+                            if valid_songs:
+                                append_csv_rows(
+                                    SETLIST_FILE,
+                                    valid_songs,
+                                    ["曲順", "日付", "公演名", "楽曲名", "ユニット", "歌唱者", "衣装"],
+                                )
+                                st.success(f"🎉 公演「{clean_event_title}」のマスタ情報およびセットリスト ({len(valid_songs)} 曲) を一括保存しました！(F5キーで最新情報に更新)")
+                            else:
+                                st.warning("⚠️ 公演マスタは追加されましたが、有効な楽曲名が入力されていないためセットリストは保存されませんでした。")
+
+            elif register_mode == "👗 衣装マスタ追加":
+                st.subheader("👗 新規衣装マスタ追加 (`costumes.csv`)")
+                with st.form("add_costume_form"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        new_costume_name = st.text_input("衣装名（必須） *")
+                        new_costume_series = st.text_input("シリーズ（例: 7thLIVE / ソンフォプリズム）")
+                    with c2:
+                        new_costume_unit = st.text_input("対象ユニット/キャラ（例: ストレイライト / 共通）")
+                        new_costume_type = st.selectbox("衣装区分", ["共通衣装", "ユニット衣装", "個装", "その他"])
+
+                    if st.form_submit_button("💾 衣装マスタへ保存"):
+                        if not new_costume_name.strip():
+                            st.error("⚠️ 衣装名を入力してください。")
+                        else:
+                            new_c_row = pd.DataFrame(
+                                [
+                                    {
+                                        "衣装": new_costume_name.strip(),
+                                        "シリーズ": new_costume_series.strip(),
+                                        "ユニット/キャラ": new_costume_unit.strip(),
+                                        "衣装区分": new_costume_type,
+                                    }
+                                ]
+                            )
+                            append_csv_rows(
+                                COSTUME_MASTER_FILE,
+                                new_c_row.to_dict("records"),
+                                ["衣装", "シリーズ", "ユニット/キャラ", "衣装区分"],
+                            )
+                            st.success(f"🎉 衣装「{new_costume_name}」を保存しました！(F5キーで最新情報に更新)")
+
+            elif register_mode == "🎵 アルバム・楽曲マスタ追加":
+                st.subheader("🎵 新規アルバム＆楽曲マスタ追加 (`albums.csv` / `songs_albums.csv`)")
+                with st.form("add_album_form"):
+                    ac1, ac2 = st.columns(2)
+                    with ac1:
+                        new_album_name = st.text_input("アルバム・CD名（例: CANVAS 01） *")
+                        new_series_name = st.text_input("アルバムシリーズ（例: CANVAS）")
+                    with ac2:
+                        new_release_date = st.date_input("発売日", datetime.now().date())
+                        new_album_singer = st.text_input("歌唱者（収録曲共通・任意）", placeholder="例: シャイニーカラーズ")
+                        new_album_songs = st.text_area("収録楽曲リスト（1行に1曲ずつ入力）")
+
+                    if st.form_submit_button("💾 アルバム＆楽曲マスタへ保存"):
+                        if not new_album_name.strip():
+                            st.error("⚠️ アルバム名を入力してください。")
+                        else:
+                            new_alb_row = [
+                                {
+                                    "アルバム名": new_album_name.strip(),
+                                    "アルバムシリーズ": new_series_name.strip(),
+                                }
+                            ]
+                            append_csv_rows(
+                                ALBUM_MASTER_FILE,
+                                new_alb_row,
+                                ["アルバム名", "アルバムシリーズ"],
+                            )
+
+                            song_lines = [s.strip() for s in new_album_songs.split("\n") if s.strip()]
+                            if song_lines:
+                                sa_df_old = load_csv(SONG_ALBUM_FILE) if os.path.exists(SONG_ALBUM_FILE) else pd.DataFrame()
+                                if "Column 7" in sa_df_old.columns:
+                                    song_numbers = pd.to_numeric(sa_df_old["Column 7"], errors="coerce")
+                                    next_song_number = int(song_numbers.max()) + 1 if song_numbers.notna().any() else 1
+                                else:
+                                    next_song_number = 1
+
+                                new_sa_rows = [
+                                    {
+                                        "Column 7": next_song_number + index,
+                                        "楽曲名": song_name,
+                                        "アルバム": new_album_name.strip(),
+                                        "リリース日": new_release_date.strftime("%Y/%m/%d"),
+                                        "歌唱者": new_album_singer.strip(),
+                                    }
+                                    for index, song_name in enumerate(song_lines)
+                                ]
+                                append_csv_rows(
+                                    SONG_ALBUM_FILE,
+                                    new_sa_rows,
+                                    ["Column 7", "楽曲名", "アルバム", "リリース日", "歌唱者"],
+                                )
+
+                            st.success(f"🎉 アルバム「{new_album_name}」と収録楽曲 ({len(song_lines)}曲) を保存しました！(F5キーで最新情報に更新)")
+
+            elif register_mode == "👤 アイドル・キャストを追加":
+                st.subheader("👤 アイドル・キャストを追加")
+                st.caption("新しいアイドル・キャストや、企画ユニットの所属を追加します。すでに登録済みのキャラ名は内容を更新します。")
+                with st.form("add_idol_form"):
+                    member_col1, member_col2 = st.columns(2)
+                    with member_col1:
+                        new_idol_name = st.text_input("キャラ名 *")
+                        existing_unit = st.text_input("既存ユニット")
+                        refrac7ions_unit = st.text_input("PJ: REFRAC7IONS")
+                    with member_col2:
+                        new_cast_name = st.text_input("キャスト名 *")
+                        team_unit = st.text_input("Team.")
+                        master_showpiece_unit = st.text_input("-Master ShowPiece-")
+                    halloween_unit = st.text_input("ハロウィン")
+                    if st.form_submit_button("💾 アイドル・キャストを保存", type="primary"):
+                        if not new_idol_name.strip() or not new_cast_name.strip():
+                            st.error("⚠️ キャラ名とキャスト名を入力してください。")
+                        else:
+                            upsert_csv_row(
+                                IDOL_MASTER_FILE,
+                                {
+                                    "キャラ": new_idol_name.strip(),
+                                    "キャスト": new_cast_name.strip(),
+                                    "既存ユニット": existing_unit.strip(),
+                                    "PJ: REFRAC7IONS": refrac7ions_unit.strip(),
+                                    "Team.": team_unit.strip(),
+                                    "-Master ShowPiece-": master_showpiece_unit.strip(),
+                                    "ハロウィン": halloween_unit.strip(),
+                                },
+                                ["キャラ", "キャスト", "既存ユニット", "PJ: REFRAC7IONS", "Team.", "-Master ShowPiece-", "ハロウィン"],
+                                ["キャラ"],
+                            )
+                            st.success(f"🎉 「{new_idol_name.strip()}」を保存しました。")
+                            st.rerun()
+
+            elif register_mode == "🃏 カード・シナリオ実装を登録":
+                st.subheader("🃏 カード・シナリオ実装を登録")
+                st.caption(
+                    "カードは P/S を指定します。P/S以外の名称はシナリオとして登録し、カレンダーでもカードとは分けて表示します。"
+                )
+                card_entry_buttons = st.columns(2)
+                if "card_entry_mode" not in st.session_state:
+                    st.session_state["card_entry_mode"] = "カード"
+                with card_entry_buttons[0]:
+                    if st.button("🃏 カード", key="card_entry_card_button", use_container_width=True,
+                                 type="primary" if st.session_state["card_entry_mode"] == "カード" else "secondary"):
+                        st.session_state["card_entry_mode"] = "カード"
                         st.rerun()
-            else:
-                with st.form("add_scenario_implementation_form"):
-                    scenario_date = st.date_input(
-                        "実装日 *",
-                        datetime.now().date(),
-                        key="scenario_date",
-                    )
-                    scenario_scope_options = unique_in_registered_order(
-                        ["全体"] + idol_list
-                        + (
-                            idol_df["既存ユニット"].dropna().tolist()
-                            if not idol_df.empty and "既存ユニット" in idol_df.columns
-                            else []
-                        )
-                    )
-                    scenario_scope = st.selectbox(
-                        "対象アイドル・ユニット",
-                        scenario_scope_options,
-                    )
-                    scenario_name = st.text_input(
-                        "シナリオ・コミュ名 *",
-                        help="この名称をP/S列へ保存し、カレンダーではシナリオとして表示します。",
-                    )
-                    scenario_bulk_text = st.text_area(
-                        "同じ日に複数対象へ実装する場合（任意）",
-                        placeholder="イルミネーションスターズ | シナリオ名\n櫻木真乃 | W.I.N.G編",
-                        height=120,
-                    )
-                    save_scenario_rows = st.form_submit_button(
-                        "💾 シナリオ実装を保存",
-                        type="primary",
-                    )
+                with card_entry_buttons[1]:
+                    if st.button("🎬 シナリオ・コミュ", key="card_entry_scenario_button", use_container_width=True,
+                                 type="primary" if st.session_state["card_entry_mode"] == "シナリオ・コミュ" else "secondary"):
+                        st.session_state["card_entry_mode"] = "シナリオ・コミュ"
+                        st.rerun()
+                card_entry_mode = st.session_state["card_entry_mode"]
 
-                if save_scenario_rows:
-                    implementation_date = scenario_date.strftime("%Y/%m/%d")
-                    scenario_rows_to_save = []
-                    if scenario_name.strip():
-                        scenario_rows_to_save.append(
-                            {
-                                "アイドル": scenario_scope,
-                                "P/S": scenario_name.strip(),
-                                "レア度": "",
-                                "カード名": "",
-                                "入手": "",
-                                "実装日": implementation_date,
-                            }
+                if card_entry_mode == "カード":
+                    card_game_label, card_ps_label = st.columns([1, 1])
+                    with card_game_label:
+                        st.caption("作品")
+                        if "card_game" not in st.session_state:
+                            st.session_state["card_game"] = "シャニマス"
+                        game_buttons = st.columns(2)
+                        for index, game_name in enumerate(["シャニマス", "シャニソン"]):
+                            if game_buttons[index].button(
+                                game_name,
+                                key=f"card_game_{game_name}",
+                                use_container_width=True,
+                                type="primary" if st.session_state["card_game"] == game_name else "secondary",
+                            ):
+                                st.session_state["card_game"] = game_name
+                                st.rerun()
+                        card_game = st.session_state["card_game"]
+                    with card_ps_label:
+                        st.caption("P/S")
+                        ps_buttons = st.columns(2)
+                        if "card_ps" not in st.session_state:
+                            st.session_state["card_ps"] = "P"
+                        with ps_buttons[0]:
+                            if st.button("P", key="card_ps_p", use_container_width=True,
+                                         type="primary" if st.session_state["card_ps"] == "P" else "secondary"):
+                                st.session_state["card_ps"] = "P"
+                                st.rerun()
+                        with ps_buttons[1]:
+                            if st.button("S", key="card_ps_s", use_container_width=True,
+                                         type="primary" if st.session_state["card_ps"] == "S" else "secondary"):
+                                st.session_state["card_ps"] = "S"
+                                st.rerun()
+                    card_ps = st.session_state["card_ps"]
+                    with st.form("add_card_implementation_form"):
+                        card_common_date = st.date_input(
+                            "実装日 *",
+                            datetime.now().date(),
+                            key="card_common_date",
                         )
-                    for raw_line in scenario_bulk_text.splitlines():
-                        parts = [
-                            part.strip()
-                            for part in re.split(r"[|｜\t]", raw_line)
-                        ]
-                        if len(parts) >= 2 and parts[0] and parts[1]:
-                            scenario_rows_to_save.append(
+                        card_col1, card_col2 = st.columns(2)
+                        with card_col1:
+                            card_idol_name = st.selectbox(
+                                "アイドル",
+                                idol_list if idol_list else [""],
+                                key="card_idol_name",
+                            )
+                            selected_member_color = MEMBER_COLOR_MAP.get(card_idol_name)
+                            if selected_member_color:
+                                st.markdown(
+                                    f"<span style='display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;'>"
+                                    f"<span style='width:1rem;height:1rem;border-radius:50%;background:{selected_member_color};border:1px solid #777;'></span>"
+                                    f"イメージカラー {selected_member_color}</span>",
+                                    unsafe_allow_html=True,
+                                )
+                            card_rarity = st.selectbox(
+                                "レア度",
+                                ["SSR", "SR", "R", "UR", "N", "その他"],
+                            )
+                        with card_col2:
+                            card_name = st.text_input("カード名")
+                            card_source = st.selectbox(
+                                "入手方法",
+                                [
+                                    "恒常", "限定", "イベント", "配布", "トワコレ",
+                                    "マイコレ", "パラコレ", "ガシャ特典", "ライブ",
+                                    "誕生日ガシャ", "その他",
+                                ],
+                            )
+
+                        st.markdown("##### まとめて貼り付ける場合")
+                        bulk_card_text = st.text_area(
+                            "1行に「アイドル｜P/S｜レア度｜カード名｜入手方法」。日付は上の実装日を共通で使用します。",
+                            placeholder=(
+                                "櫻木真乃 | P | SSR | 【カード名】 | 限定\n"
+                                "風野灯織 | S | SR | 【カード名】 | イベント"
+                            ),
+                            height=150,
+                        )
+                        save_card_rows = st.form_submit_button(
+                            "💾 カード実装を保存",
+                            type="primary",
+                        )
+
+                    if save_card_rows:
+                        implementation_date = card_common_date.strftime("%Y/%m/%d")
+                        card_rows_to_save = []
+                        if card_name.strip():
+                            card_rows_to_save.append(
+                                {
+                                    "アイドル": card_idol_name,
+                                    "作品": card_game,
+                                    "P/S": card_ps,
+                                    "レア度": card_rarity,
+                                    "カード名": card_name.strip(),
+                                    "入手": card_source,
+                                    "実装日": implementation_date,
+                                }
+                            )
+                        for raw_line in bulk_card_text.splitlines():
+                            parts = [
+                                part.strip()
+                                for part in re.split(r"[|｜\t]", raw_line)
+                            ]
+                            if len(parts) < 4:
+                                continue
+                            parts += [""] * (5 - len(parts))
+                            if parts[1] not in {"P", "S"}:
+                                continue
+                            card_rows_to_save.append(
                                 {
                                     "アイドル": parts[0],
+                                    "作品": card_game,
                                     "P/S": parts[1],
+                                    "レア度": parts[2],
+                                    "カード名": parts[3],
+                                    "入手": parts[4],
+                                    "実装日": implementation_date,
+                                }
+                            )
+
+                        if not card_rows_to_save:
+                            st.error("カード名を入力するか、まとめ入力を貼り付けてください。")
+                        else:
+                            saved_count = upsert_csv_rows(
+                                CARD_FILE,
+                                card_rows_to_save,
+                                ["アイドル", "作品", "P/S", "レア度", "カード名", "入手", "実装日"],
+                                ["アイドル", "P/S", "カード名", "実装日"],
+                            )
+                            st.success(f"{saved_count}件のカード実装を保存しました。")
+                            st.rerun()
+                else:
+                    with st.form("add_scenario_implementation_form"):
+                        scenario_date = st.date_input(
+                            "実装日 *",
+                            datetime.now().date(),
+                            key="scenario_date",
+                        )
+                        scenario_scope_options = unique_in_registered_order(
+                            ["全体"] + idol_list
+                            + (
+                                idol_df["既存ユニット"].dropna().tolist()
+                                if not idol_df.empty and "既存ユニット" in idol_df.columns
+                                else []
+                            )
+                        )
+                        scenario_scope = st.selectbox(
+                            "対象アイドル・ユニット",
+                            scenario_scope_options,
+                        )
+                        scenario_name = st.text_input(
+                            "シナリオ・コミュ名 *",
+                            help="この名称をP/S列へ保存し、カレンダーではシナリオとして表示します。",
+                        )
+                        scenario_bulk_text = st.text_area(
+                            "同じ日に複数対象へ実装する場合（任意）",
+                            placeholder="イルミネーションスターズ | シナリオ名\n櫻木真乃 | W.I.N.G編",
+                            height=120,
+                        )
+                        save_scenario_rows = st.form_submit_button(
+                            "💾 シナリオ実装を保存",
+                            type="primary",
+                        )
+
+                    if save_scenario_rows:
+                        implementation_date = scenario_date.strftime("%Y/%m/%d")
+                        scenario_rows_to_save = []
+                        if scenario_name.strip():
+                            scenario_rows_to_save.append(
+                                {
+                                    "アイドル": scenario_scope,
+                                    "P/S": scenario_name.strip(),
                                     "レア度": "",
                                     "カード名": "",
                                     "入手": "",
                                     "実装日": implementation_date,
                                 }
                             )
-                    if not scenario_rows_to_save:
-                        st.error("シナリオ名を入力してください。")
-                    else:
-                        saved_count = upsert_csv_rows(
-                            CARD_FILE,
-                            scenario_rows_to_save,
-                            ["アイドル", "P/S", "レア度", "カード名", "入手", "実装日"],
-                            ["アイドル", "P/S", "実装日"],
-                        )
-                        st.success(f"{saved_count}件のシナリオ実装を保存しました。")
-                        st.rerun()
-
-        elif register_mode == "📝 楽曲の分類・歌詞・公式リンクを登録":
-            st.subheader("📝 楽曲の分類・歌詞・公式リンクを登録")
-            st.caption("曲名を選んで、分類・歌詞・YouTubeリンクを登録します。同じ曲・種別を登録し直すと内容を更新します。")
-            song_entry_type = st.radio(
-                "登録する内容:",
-                ["楽曲区分", "歌詞", "公式音源", "音源バージョン", "MV", "ライブダイジェスト / XR冒頭無料"],
-                horizontal=True,
-            )
-
-            known_song_options = unique_in_registered_order(
-                df["集計用楽曲名"].dropna().tolist() if "集計用楽曲名" in df.columns else []
-            )
-            if song_entry_type == "ライブダイジェスト / XR冒頭無料":
-                with st.form("add_live_video_form"):
-                    video_kind = st.radio("映像の種類:", ["ライブダイジェスト", "XR冒頭無料"], horizontal=True)
-                    live_input_mode = st.radio("公演名:", ["公演マスターから選択", "手入力"], horizontal=True)
-                    known_live_options = unique_in_registered_order(
-                        event_df["公演名"].dropna().tolist() if 'event_df' in locals() and "公演名" in event_df.columns else []
-                    )
-                    if live_input_mode == "公演マスターから選択" and known_live_options:
-                        media_live_name = st.selectbox("対象公演", known_live_options)
-                    else:
-                        media_live_name = st.text_input("対象公演 *")
-                    media_url = st.text_input("YouTube URL *", placeholder="https://www.youtube.com/watch?v=...")
-                    if st.form_submit_button("💾 公演映像リンクを保存", type="primary"):
-                        if not media_live_name.strip() or not media_url.strip():
-                            st.error("⚠️ 対象公演とYouTube URLを入力してください。")
+                        for raw_line in scenario_bulk_text.splitlines():
+                            parts = [
+                                part.strip()
+                                for part in re.split(r"[|｜\t]", raw_line)
+                            ]
+                            if len(parts) >= 2 and parts[0] and parts[1]:
+                                scenario_rows_to_save.append(
+                                    {
+                                        "アイドル": parts[0],
+                                        "P/S": parts[1],
+                                        "レア度": "",
+                                        "カード名": "",
+                                        "入手": "",
+                                        "実装日": implementation_date,
+                                    }
+                                )
+                        if not scenario_rows_to_save:
+                            st.error("シナリオ名を入力してください。")
                         else:
-                            target_file = YOUTUBE_LIVE_DIGEST_FILE if video_kind == "ライブダイジェスト" else YOUTUBE_XR_INTRO_FILE
-                            upsert_csv_row(
-                                target_file,
-                                {"対象公演": media_live_name.strip(), "種別": video_kind, "YouTube_URL": media_url.strip()},
-                                ["対象公演", "種別", "YouTube_URL"],
-                                ["対象公演", "種別"],
+                            saved_count = upsert_csv_rows(
+                                CARD_FILE,
+                                scenario_rows_to_save,
+                                ["アイドル", "P/S", "レア度", "カード名", "入手", "実装日"],
+                                ["アイドル", "P/S", "実装日"],
                             )
-                            st.success("🎉 公演映像リンクを保存しました。")
-                            st.rerun()
-            else:
-                with st.form("add_song_detail_form"):
-                    song_input_mode = st.radio("楽曲:", ["登録済みから選択", "手入力"], horizontal=True)
-                    if song_input_mode == "登録済みから選択" and known_song_options:
-                        detail_song_name = st.selectbox("楽曲名", known_song_options)
-                    else:
-                        detail_song_name = st.text_input("楽曲名 *")
-
-                    if song_entry_type == "楽曲区分":
-                        category_options = ["オリジナル", "合同", "カバー", "外部", "その他", "自由入力"]
-                        selected_category = st.selectbox("楽曲区分", category_options)
-                        detail_value = st.text_input("自由入力の区分") if selected_category == "自由入力" else selected_category
-                    elif song_entry_type == "歌詞":
-                        detail_value = st.text_area("歌詞 *", height=220, placeholder="歌詞を貼り付けてください")
-                    else:
-                        if song_entry_type in ["音源バージョン", "MV"]:
-                            media_type = st.text_input("種別", value="公式音源" if song_entry_type == "音源バージョン" else "3DMV")
-                            version_label = st.text_input("表示名（任意）", placeholder="例: 28人Ver. / 2DMV")
-                        detail_value = st.text_input("YouTube URL *", placeholder="https://youtu.be/...")
-
-                    if st.form_submit_button("💾 楽曲情報を保存", type="primary"):
-                        if not detail_song_name.strip() or not detail_value.strip():
-                            st.error("⚠️ 楽曲名と必須項目を入力してください。")
-                        elif song_entry_type == "楽曲区分":
-                            upsert_csv_row(CATEGORY_FILE, {"楽曲名": detail_song_name.strip(), "楽曲区分": detail_value.strip()}, ["楽曲名", "楽曲区分"], ["楽曲名"])
-                            st.success("🎉 楽曲区分を保存しました。")
-                            st.rerun()
-                        elif song_entry_type == "歌詞":
-                            upsert_csv_row(LYRICS_FILE, {"楽曲名": detail_song_name.strip(), "歌詞": detail_value.strip()}, ["楽曲名", "歌詞"], ["楽曲名"])
-                            st.success("🎉 歌詞を保存しました。")
-                            st.rerun()
-                        elif song_entry_type == "公式音源":
-                            upsert_csv_row(YOUTUBE_AUDIO_DRAFT_FILE, {"楽曲名": detail_song_name.strip(), "公式音源_URL": detail_value.strip()}, ["楽曲名", "公式音源_URL"], ["楽曲名"])
-                            st.success("🎉 公式音源リンクを保存しました。")
-                            st.rerun()
-                        else:
-                            target_file = YOUTUBE_AUDIO_VARIANTS_FILE if song_entry_type == "音源バージョン" else YOUTUBE_VIDEO_VARIANTS_FILE
-                            upsert_csv_row(
-                                target_file,
-                                {"楽曲名": detail_song_name.strip(), "種別": media_type.strip(), "バージョン表示": version_label.strip(), "YouTube_URL": detail_value.strip()},
-                                ["楽曲名", "種別", "バージョン表示", "YouTube_URL"],
-                                ["楽曲名", "種別", "バージョン表示"],
-                            )
-                            st.success("🎉 動画・音源リンクを保存しました。")
+                            st.success(f"{saved_count}件のシナリオ実装を保存しました。")
                             st.rerun()
 
-        elif register_mode == "🖼️ ジャケット情報を登録":
-            st.subheader("🖼️ ジャケット情報を登録")
-            st.caption("先に画像ファイルを album_jackets フォルダへ入れ、そのファイル名を指定します。同じアルバムでも、曲ごとに別ジャケットを指定できます。")
-            with st.form("add_jacket_map_form"):
-                jacket_target_type = st.radio(
-                    "ジャケットの使い方:",
-                    ["アルバムの共通ジャケット", "この曲だけ別ジャケット"],
+            elif register_mode == "📝 楽曲の分類・歌詞・公式リンクを登録":
+                st.subheader("📝 楽曲の分類・歌詞・公式リンクを登録")
+                st.caption("曲名を選んで、分類・歌詞・YouTubeリンクを登録します。同じ曲・種別を登録し直すと内容を更新します。")
+                song_entry_type = st.radio(
+                    "登録する内容:",
+                    ["楽曲区分", "歌詞", "公式音源", "音源バージョン", "MV", "ライブダイジェスト / XR冒頭無料"],
                     horizontal=True,
                 )
-                jacket_album_name = st.text_input("アルバム名 *")
-                jacket_song_name = ""
-                if jacket_target_type == "この曲だけ別ジャケット":
-                    jacket_song_name = st.text_input("楽曲名 *")
-                jacket_file_name = st.text_input("画像ファイル名 *", placeholder="例: LACM-12345.jpg")
-                if st.form_submit_button("💾 ジャケット対応を保存", type="primary"):
-                    required_song_name = jacket_target_type == "この曲だけ別ジャケット"
-                    if not jacket_album_name.strip() or not jacket_file_name.strip() or (required_song_name and not jacket_song_name.strip()):
-                        st.error("⚠️ 必須項目を入力してください。")
-                    else:
-                        if jacket_target_type == "この曲だけ別ジャケット":
-                            upsert_csv_row(
-                                SONG_JACKET_FILE,
-                                {
-                                    "楽曲名": jacket_song_name.strip(),
-                                    "アルバム": jacket_album_name.strip(),
-                                    "ジャケット画像ファイル": jacket_file_name.strip(),
-                                },
-                                ["楽曲名", "アルバム", "ジャケット画像ファイル"],
-                                ["楽曲名", "アルバム"],
-                            )
-                            st.success("🎉 この曲専用のジャケットを保存しました。")
+
+                known_song_options = unique_in_registered_order(
+                    df["集計用楽曲名"].dropna().tolist() if "集計用楽曲名" in df.columns else []
+                )
+                if song_entry_type == "ライブダイジェスト / XR冒頭無料":
+                    with st.form("add_live_video_form"):
+                        video_kind = st.radio("映像の種類:", ["ライブダイジェスト", "XR冒頭無料"], horizontal=True)
+                        live_input_mode = st.radio("公演名:", ["公演マスターから選択", "手入力"], horizontal=True)
+                        known_live_options = unique_in_registered_order(
+                            event_df["公演名"].dropna().tolist() if 'event_df' in locals() and "公演名" in event_df.columns else []
+                        )
+                        if live_input_mode == "公演マスターから選択" and known_live_options:
+                            media_live_name = st.selectbox("対象公演", known_live_options)
                         else:
-                            upsert_csv_row(
-                                JACKET_MAP_FILE,
-                                {"アルバム名": jacket_album_name.strip(), "ジャケット画像ファイル": jacket_file_name.strip()},
-                                ["アルバム名", "ジャケット画像ファイル"],
-                                ["アルバム名"],
-                            )
-                            st.success("🎉 アルバム共通ジャケットを保存しました。")
-                        st.rerun()
+                            media_live_name = st.text_input("対象公演 *")
+                        media_url = st.text_input("YouTube URL *", placeholder="https://www.youtube.com/watch?v=...")
+                        if st.form_submit_button("💾 公演映像リンクを保存", type="primary"):
+                            if not media_live_name.strip() or not media_url.strip():
+                                st.error("⚠️ 対象公演とYouTube URLを入力してください。")
+                            else:
+                                target_file = YOUTUBE_LIVE_DIGEST_FILE if video_kind == "ライブダイジェスト" else YOUTUBE_XR_INTRO_FILE
+                                upsert_csv_row(
+                                    target_file,
+                                    {"対象公演": media_live_name.strip(), "種別": video_kind, "YouTube_URL": media_url.strip()},
+                                    ["対象公演", "種別", "YouTube_URL"],
+                                    ["対象公演", "種別"],
+                                )
+                                st.success("🎉 公演映像リンクを保存しました。")
+                                st.rerun()
+                else:
+                    with st.form("add_song_detail_form"):
+                        song_input_mode = st.radio("楽曲:", ["登録済みから選択", "手入力"], horizontal=True)
+                        if song_input_mode == "登録済みから選択" and known_song_options:
+                            detail_song_name = st.selectbox("楽曲名", known_song_options)
+                        else:
+                            detail_song_name = st.text_input("楽曲名 *")
 
-        elif register_mode == "👥 出演・参加履歴をまとめて登録":
-            st.subheader("👥 出演・参加履歴をまとめて登録")
-            st.caption("まず全員の状態を決め、欠席・一部参加などの例外だけを選びます。全員分を1人ずつ入力する必要はありません。")
+                        if song_entry_type == "楽曲区分":
+                            category_options = ["オリジナル", "合同", "カバー", "外部", "その他", "自由入力"]
+                            selected_category = st.selectbox("楽曲区分", category_options)
+                            detail_value = st.text_input("自由入力の区分") if selected_category == "自由入力" else selected_category
+                        elif song_entry_type == "歌詞":
+                            detail_value = st.text_area("歌詞 *", height=220, placeholder="歌詞を貼り付けてください")
+                        else:
+                            if song_entry_type in ["音源バージョン", "MV"]:
+                                media_type = st.text_input("種別", value="公式音源" if song_entry_type == "音源バージョン" else "3DMV")
+                                version_label = st.text_input("表示名（任意）", placeholder="例: 28人Ver. / 2DMV")
+                            detail_value = st.text_input("YouTube URL *", placeholder="https://youtu.be/...")
 
-            current_attendance = (
-                load_csv(ATTENDANCE_FILE).fillna("")
-                if os.path.exists(ATTENDANCE_FILE) else pd.DataFrame()
-            )
-            attendance_cast_options = unique_in_registered_order(
-                (current_attendance["キャスト"].tolist() if "キャスト" in current_attendance.columns else [])
-                + cast_list
-            )
-            if not attendance_cast_options:
-                st.warning("参加履歴CSVまたはアイドルマスターからキャスト一覧を読み込めませんでした。")
-            else:
-                attendance_event_choices = []
-                attendance_event_lookup = {}
-                if 'event_df' in locals() and not event_df.empty:
-                    attendance_event_date_col = next((c for c in event_df.columns if "日付" in c), None)
-                    attendance_event_title_col = next((c for c in event_df.columns if "公演" in c or "イベント" in c or "ライブ" in c), None)
-                    attendance_event_venue_col = next((c for c in event_df.columns if "会場" in c), None)
-                    if attendance_event_date_col and attendance_event_title_col:
-                        for row in event_df.to_dict("records"):
-                            event_title = clean_text(str(row[attendance_event_title_col]))
-                            event_date = clean_text(str(row[attendance_event_date_col]))
-                            event_venue = clean_text(str(row[attendance_event_venue_col])) if attendance_event_venue_col else ""
-                            event_label = f"{event_date} ｜ {event_title}"
-                            attendance_event_choices.append(event_label)
-                            attendance_event_lookup[event_label] = (event_title, event_venue)
+                        if st.form_submit_button("💾 楽曲情報を保存", type="primary"):
+                            if not detail_song_name.strip() or not detail_value.strip():
+                                st.error("⚠️ 楽曲名と必須項目を入力してください。")
+                            elif song_entry_type == "楽曲区分":
+                                upsert_csv_row(CATEGORY_FILE, {"楽曲名": detail_song_name.strip(), "楽曲区分": detail_value.strip()}, ["楽曲名", "楽曲区分"], ["楽曲名"])
+                                st.success("🎉 楽曲区分を保存しました。")
+                                st.rerun()
+                            elif song_entry_type == "歌詞":
+                                upsert_csv_row(LYRICS_FILE, {"楽曲名": detail_song_name.strip(), "歌詞": detail_value.strip()}, ["楽曲名", "歌詞"], ["楽曲名"])
+                                st.success("🎉 歌詞を保存しました。")
+                                st.rerun()
+                            elif song_entry_type == "公式音源":
+                                upsert_csv_row(YOUTUBE_AUDIO_DRAFT_FILE, {"楽曲名": detail_song_name.strip(), "公式音源_URL": detail_value.strip()}, ["楽曲名", "公式音源_URL"], ["楽曲名"])
+                                st.success("🎉 公式音源リンクを保存しました。")
+                                st.rerun()
+                            else:
+                                target_file = YOUTUBE_AUDIO_VARIANTS_FILE if song_entry_type == "音源バージョン" else YOUTUBE_VIDEO_VARIANTS_FILE
+                                upsert_csv_row(
+                                    target_file,
+                                    {"楽曲名": detail_song_name.strip(), "種別": media_type.strip(), "バージョン表示": version_label.strip(), "YouTube_URL": detail_value.strip()},
+                                    ["楽曲名", "種別", "バージョン表示", "YouTube_URL"],
+                                    ["楽曲名", "種別", "バージョン表示"],
+                                )
+                                st.success("🎉 動画・音源リンクを保存しました。")
+                                st.rerun()
 
-                with st.form("bulk_attendance_form"):
-                    input_method = st.radio(
-                        "公演の指定方法:",
-                        ["公演マスターから選択", "手入力"],
+            elif register_mode == "🖼️ ジャケット情報を登録":
+                st.subheader("🖼️ ジャケット情報を登録")
+                st.caption("先に画像ファイルを album_jackets フォルダへ入れ、そのファイル名を指定します。同じアルバムでも、曲ごとに別ジャケットを指定できます。")
+                with st.form("add_jacket_map_form"):
+                    jacket_target_type = st.radio(
+                        "ジャケットの使い方:",
+                        ["アルバムの共通ジャケット", "この曲だけ別ジャケット"],
                         horizontal=True,
                     )
-                    if input_method == "公演マスターから選択" and attendance_event_choices:
-                        attendance_event_label = st.selectbox("公演:", attendance_event_choices)
-                        attendance_event_name, attendance_venue = attendance_event_lookup[attendance_event_label]
-                    else:
-                        attendance_event_name = st.text_input("公演名 *")
-                        attendance_venue = st.text_input("会場")
-
-                    day_col, default_col = st.columns(2)
-                    with day_col:
-                        attendance_day = st.selectbox(
-                            "日程・公演回:",
-                            ["DAY1", "DAY2", "DAY3", "昼公演", "夜公演", "開催"],
-                        )
-                    with default_col:
-                        default_attendance_status = st.selectbox(
-                            "全員の初期状態:",
-                            ["参加", "ユニット出演予定なし", "対象外"],
-                            help="下の例外指定をした人だけ、ここで選んだ状態から変更されます。",
-                        )
-
-                    st.markdown("##### 例外だけ選択")
-                    exception_statuses = [
-                        "一部楽曲参加", "急遽不参加", "欠席", "サプライズ披露",
-                        "ユニット出演予定なし", "対象外",
-                    ]
-                    exception_map = {}
-                    status_columns = st.columns(2)
-                    for index, status_name in enumerate(exception_statuses):
-                        with status_columns[index % 2]:
-                            exception_map[status_name] = st.multiselect(
-                                status_name,
-                                attendance_cast_options,
-                                key=f"attendance_exception_{status_name}",
-                            )
-
-                    st.markdown("##### 補足・追加参加決定日（任意）")
-                    attendance_notes = st.text_area(
-                        "1行ずつ「キャスト名 | 補足 | YYYY/MM/DD」で入力",
-                        placeholder="例: 白石晴香 | 体調不良 |\n例: 河野ひより | 追加参加 | 2021/11/29",
-                    )
-                    replace_existing = st.checkbox(
-                        "同じ公演・日程の既存参加履歴を置き換える",
-                        value=True,
-                    )
-
-                    if st.form_submit_button("💾 この公演の参加履歴を保存", type="primary"):
-                        if not attendance_event_name.strip():
-                            st.error("⚠️ 公演名を入力してください。")
+                    jacket_album_name = st.text_input("アルバム名 *")
+                    jacket_song_name = ""
+                    if jacket_target_type == "この曲だけ別ジャケット":
+                        jacket_song_name = st.text_input("楽曲名 *")
+                    jacket_file_name = st.text_input("画像ファイル名 *", placeholder="例: LACM-12345.jpg")
+                    if st.form_submit_button("💾 ジャケット対応を保存", type="primary"):
+                        required_song_name = jacket_target_type == "この曲だけ別ジャケット"
+                        if not jacket_album_name.strip() or not jacket_file_name.strip() or (required_song_name and not jacket_song_name.strip()):
+                            st.error("⚠️ 必須項目を入力してください。")
                         else:
-                            status_by_cast = {
-                                cast_name: default_attendance_status
-                                for cast_name in attendance_cast_options
-                            }
-                            for status_name, selected_casts in exception_map.items():
-                                for cast_name in selected_casts:
-                                    status_by_cast[cast_name] = status_name
-
-                            note_map = {}
-                            for note_line in attendance_notes.splitlines():
-                                note_parts = [part.strip() for part in re.split(r"[|｜]", note_line)]
-                                if note_parts and note_parts[0]:
-                                    note_map[note_parts[0]] = {
-                                        "補足": note_parts[1] if len(note_parts) > 1 else "",
-                                        "追加参加決定日": note_parts[2] if len(note_parts) > 2 else "",
-                                    }
-
-                            new_attendance_rows = [
-                                {
-                                    "公演名": clean_live_name(attendance_event_name.strip()),
-                                    "日程": attendance_day,
-                                    "会場": attendance_venue.strip(),
-                                    "キャスト": cast_name,
-                                    "参加状況": status_by_cast[cast_name],
-                                    "追加参加決定日": note_map.get(cast_name, {}).get("追加参加決定日", ""),
-                                    "補足": note_map.get(cast_name, {}).get("補足", ""),
-                                    "判定元": "アプリ入力",
-                                }
-                                for cast_name in attendance_cast_options
-                            ]
-                            expected_columns = [
-                                "公演名", "日程", "会場", "キャスト", "参加状況",
-                                "追加参加決定日", "補足", "判定元",
-                            ]
-                            if current_attendance.empty:
-                                updated_attendance = pd.DataFrame(columns=expected_columns)
+                            if jacket_target_type == "この曲だけ別ジャケット":
+                                upsert_csv_row(
+                                    SONG_JACKET_FILE,
+                                    {
+                                        "楽曲名": jacket_song_name.strip(),
+                                        "アルバム": jacket_album_name.strip(),
+                                        "ジャケット画像ファイル": jacket_file_name.strip(),
+                                    },
+                                    ["楽曲名", "アルバム", "ジャケット画像ファイル"],
+                                    ["楽曲名", "アルバム"],
+                                )
+                                st.success("🎉 この曲専用のジャケットを保存しました。")
                             else:
-                                updated_attendance = current_attendance.copy()
-                            if replace_existing and {"公演名", "日程"}.issubset(updated_attendance.columns):
-                                updated_attendance = updated_attendance[
-                                    ~(
-                                        (updated_attendance["公演名"] == clean_live_name(attendance_event_name.strip()))
-                                        & (updated_attendance["日程"] == attendance_day)
-                                    )
-                                ]
-                            save_dataframe(
-                                pd.concat(
-                                    [updated_attendance, pd.DataFrame(new_attendance_rows)],
-                                    ignore_index=True,
-                                ).reindex(columns=expected_columns),
-                                ATTENDANCE_FILE,
-                                create_backup=True,
-                            )
-                            st.success(f"{attendance_day}分の {len(new_attendance_rows)} 人を保存しました。")
+                                upsert_csv_row(
+                                    JACKET_MAP_FILE,
+                                    {"アルバム名": jacket_album_name.strip(), "ジャケット画像ファイル": jacket_file_name.strip()},
+                                    ["アルバム名", "ジャケット画像ファイル"],
+                                    ["アルバム名"],
+                                )
+                                st.success("🎉 アルバム共通ジャケットを保存しました。")
                             st.rerun()
 
-        elif register_mode == "🗃️ 全CSVを追加・編集":
-            st.subheader("🗃️ 全CSVを追加・編集")
-            st.caption("対象のCSVを選んで、行の追加・既存データの修正・削除ができます。保存時には同じフォルダにバックアップを自動作成します。")
+            elif register_mode == "👥 出演・参加履歴をまとめて登録":
+                st.subheader("👥 出演・参加履歴をまとめて登録")
+                st.caption("まず全員の状態を決め、欠席・一部参加などの例外だけを選びます。全員分を1人ずつ入力する必要はありません。")
 
-            csv_targets = {
-                "🎤 セットリスト（songs.csv）": SETLIST_FILE,
-                "🏟️ 公演マスター（events.csv）": EVENT_MASTER_FILE,
-                "👥 アイドル・キャスト（idols.csv）": IDOL_MASTER_FILE,
-                "👗 衣装マスター（costumes.csv）": COSTUME_MASTER_FILE,
-                "💿 アルバム（albums.csv）": ALBUM_MASTER_FILE,
-                "🎼 楽曲×アルバム（songs_albums.csv）": SONG_ALBUM_FILE,
-                "🏷️ 楽曲区分（songs_categories.csv）": CATEGORY_FILE,
-                "📝 歌詞（lyrics.csv）": LYRICS_FILE,
-                "📅 出演・参加履歴（cast_attendance.csv）": ATTENDANCE_FILE,
-                "📺 公式番組・配信履歴（broadcasts.csv）": BROADCAST_FILE,
-                "🃏 カード実装履歴（cards.tsv）": CARD_FILE,
-                "📻 シャニラジ出演履歴（shiny_radio_appearances.csv）": RADIO_APPEARANCE_FILE,
-                "📻 シャニラジ各回データ（shiny_radio_episodes.tsv）": RADIO_EPISODE_FILE,
-                "🎙️ オーコメ担当・Blu-ray版": COMMENTARY_BD_FILE,
-                "🎙️ オーコメ担当・配信版": COMMENTARY_STREAM_FILE,
-                "🖼️ ジャケット情報（release_jackets.csv）": JACKET_MAP_FILE,
-                "🖼️ 曲別ジャケット（song_jackets.csv）": SONG_JACKET_FILE,
-                "▶️ 公式音源リンク": YOUTUBE_AUDIO_DRAFT_FILE,
-                "🎵 音源バージョン別リンク": YOUTUBE_AUDIO_VARIANTS_FILE,
-                "🎵 Migratory Echoes・収録盤別音源": MIGRATORY_ECHOES_MEDIA_FILE,
-                "🎬 MVリンク": YOUTUBE_VIDEO_VARIANTS_FILE,
-                "🎬 ユニット・企画PVリンク": YOUTUBE_UNIT_PV_FILE,
-                "📻 シャニラジ切り抜きリンク": YOUTUBE_RADIO_CLIP_FILE,
-                "📡 公演AP生配信リンク": YOUTUBE_LIVE_AP_STREAM_FILE,
-                "🎉 周年PVリンク": YOUTUBE_ANNIVERSARY_PV_FILE,
-                "🎨 公演公式告知・ビジュアルリンク": EVENT_SOCIAL_LINKS_FILE,
-                "🎥 ライブダイジェスト": YOUTUBE_LIVE_DIGEST_FILE,
-                "🕶️ XR冒頭無料映像": YOUTUBE_XR_INTRO_FILE,
-                "🌐 公演公式サイト": EVENT_OFFICIAL_SITE_FILE,
-                "💴 価格推移（price_history.csv）": PRICE_HISTORY_FILE,
-            }
-            available_csv_targets = {
-                label: path for label, path in csv_targets.items() if path and os.path.exists(path)
-            }
-            selected_csv_label = st.selectbox(
-                "編集するCSVを選択:",
-                list(available_csv_targets.keys()),
-                key="tab7_csv_target",
-            )
-            selected_csv_path = available_csv_targets[selected_csv_label]
-            selected_csv_df = load_csv(selected_csv_path).fillna("")
+                current_attendance = (
+                    load_csv(ATTENDANCE_FILE).fillna("")
+                    if os.path.exists(ATTENDANCE_FILE) else pd.DataFrame()
+                )
+                attendance_cast_options = unique_in_registered_order(
+                    (current_attendance["キャスト"].tolist() if "キャスト" in current_attendance.columns else [])
+                    + cast_list
+                )
+                if not attendance_cast_options:
+                    st.warning("参加履歴CSVまたはアイドルマスターからキャスト一覧を読み込めませんでした。")
+                else:
+                    attendance_event_choices = []
+                    attendance_event_lookup = {}
+                    if 'event_df' in locals() and not event_df.empty:
+                        attendance_event_date_col = next((c for c in event_df.columns if "日付" in c), None)
+                        attendance_event_title_col = next((c for c in event_df.columns if "公演" in c or "イベント" in c or "ライブ" in c), None)
+                        attendance_event_venue_col = next((c for c in event_df.columns if "会場" in c), None)
+                        if attendance_event_date_col and attendance_event_title_col:
+                            for row in event_df.to_dict("records"):
+                                event_title = clean_text(str(row[attendance_event_title_col]))
+                                event_date = clean_text(str(row[attendance_event_date_col]))
+                                event_venue = clean_text(str(row[attendance_event_venue_col])) if attendance_event_venue_col else ""
+                                event_label = f"{event_date} ｜ {event_title}"
+                                attendance_event_choices.append(event_label)
+                                attendance_event_lookup[event_label] = (event_title, event_venue)
 
-            st.caption(f"{os.path.basename(selected_csv_path)} ｜ {len(selected_csv_df):,} 行 ｜ {len(selected_csv_df.columns)} 列")
-            edited_csv_df = st.data_editor(
-                selected_csv_df,
-                num_rows="dynamic",
-                use_container_width=True,
-                hide_index=True,
-                key=f"csv_editor_{make_search_key(os.path.basename(selected_csv_path))}",
-            )
-            st.warning("保存すると、選択中CSVの内容全体がこの表の内容に置き換わります。")
-            if st.button("💾 このCSVへ保存", key="save_selected_csv", type="primary"):
-                backup_path = save_dataframe(
-                    edited_csv_df,
-                    selected_csv_path,
-                    create_backup=True,
+                    with st.form("bulk_attendance_form"):
+                        input_method = st.radio(
+                            "公演の指定方法:",
+                            ["公演マスターから選択", "手入力"],
+                            horizontal=True,
+                        )
+                        if input_method == "公演マスターから選択" and attendance_event_choices:
+                            attendance_event_label = st.selectbox("公演:", attendance_event_choices)
+                            attendance_event_name, attendance_venue = attendance_event_lookup[attendance_event_label]
+                        else:
+                            attendance_event_name = st.text_input("公演名 *")
+                            attendance_venue = st.text_input("会場")
+
+                        day_col, default_col = st.columns(2)
+                        with day_col:
+                            attendance_day = st.selectbox(
+                                "日程・公演回:",
+                                ["DAY1", "DAY2", "DAY3", "昼公演", "夜公演", "開催"],
+                            )
+                        with default_col:
+                            default_attendance_status = st.selectbox(
+                                "全員の初期状態:",
+                                ["参加", "ユニット出演予定なし", "対象外"],
+                                help="下の例外指定をした人だけ、ここで選んだ状態から変更されます。",
+                            )
+
+                        st.markdown("##### 例外だけ選択")
+                        exception_statuses = [
+                            "一部楽曲参加", "急遽不参加", "欠席", "サプライズ披露",
+                            "ユニット出演予定なし", "対象外",
+                        ]
+                        exception_map = {}
+                        status_columns = st.columns(2)
+                        for index, status_name in enumerate(exception_statuses):
+                            with status_columns[index % 2]:
+                                exception_map[status_name] = st.multiselect(
+                                    status_name,
+                                    attendance_cast_options,
+                                    key=f"attendance_exception_{status_name}",
+                                )
+
+                        st.markdown("##### 補足・追加参加決定日（任意）")
+                        attendance_notes = st.text_area(
+                            "1行ずつ「キャスト名 | 補足 | YYYY/MM/DD」で入力",
+                            placeholder="例: 白石晴香 | 体調不良 |\n例: 河野ひより | 追加参加 | 2021/11/29",
+                        )
+                        replace_existing = st.checkbox(
+                            "同じ公演・日程の既存参加履歴を置き換える",
+                            value=True,
+                        )
+
+                        if st.form_submit_button("💾 この公演の参加履歴を保存", type="primary"):
+                            if not attendance_event_name.strip():
+                                st.error("⚠️ 公演名を入力してください。")
+                            else:
+                                status_by_cast = {
+                                    cast_name: default_attendance_status
+                                    for cast_name in attendance_cast_options
+                                }
+                                for status_name, selected_casts in exception_map.items():
+                                    for cast_name in selected_casts:
+                                        status_by_cast[cast_name] = status_name
+
+                                note_map = {}
+                                for note_line in attendance_notes.splitlines():
+                                    note_parts = [part.strip() for part in re.split(r"[|｜]", note_line)]
+                                    if note_parts and note_parts[0]:
+                                        note_map[note_parts[0]] = {
+                                            "補足": note_parts[1] if len(note_parts) > 1 else "",
+                                            "追加参加決定日": note_parts[2] if len(note_parts) > 2 else "",
+                                        }
+
+                                new_attendance_rows = [
+                                    {
+                                        "公演名": clean_live_name(attendance_event_name.strip()),
+                                        "日程": attendance_day,
+                                        "会場": attendance_venue.strip(),
+                                        "キャスト": cast_name,
+                                        "参加状況": status_by_cast[cast_name],
+                                        "追加参加決定日": note_map.get(cast_name, {}).get("追加参加決定日", ""),
+                                        "補足": note_map.get(cast_name, {}).get("補足", ""),
+                                        "判定元": "アプリ入力",
+                                    }
+                                    for cast_name in attendance_cast_options
+                                ]
+                                expected_columns = [
+                                    "公演名", "日程", "会場", "キャスト", "参加状況",
+                                    "追加参加決定日", "補足", "判定元",
+                                ]
+                                if current_attendance.empty:
+                                    updated_attendance = pd.DataFrame(columns=expected_columns)
+                                else:
+                                    updated_attendance = current_attendance.copy()
+                                if replace_existing and {"公演名", "日程"}.issubset(updated_attendance.columns):
+                                    updated_attendance = updated_attendance[
+                                        ~(
+                                            (updated_attendance["公演名"] == clean_live_name(attendance_event_name.strip()))
+                                            & (updated_attendance["日程"] == attendance_day)
+                                        )
+                                    ]
+                                save_dataframe(
+                                    pd.concat(
+                                        [updated_attendance, pd.DataFrame(new_attendance_rows)],
+                                        ignore_index=True,
+                                    ).reindex(columns=expected_columns),
+                                    ATTENDANCE_FILE,
+                                    create_backup=True,
+                                )
+                                st.success(f"{attendance_day}分の {len(new_attendance_rows)} 人を保存しました。")
+                                st.rerun()
+
+            elif register_mode == "🗃️ 全CSVを追加・編集":
+                st.subheader("🗃️ 全CSVを追加・編集")
+                st.caption("対象のCSVを選んで、行の追加・既存データの修正・削除ができます。保存時には同じフォルダにバックアップを自動作成します。")
+
+                csv_targets = {
+                    "🎤 セットリスト（songs.csv）": SETLIST_FILE,
+                    "🏟️ 公演マスター（events.csv）": EVENT_MASTER_FILE,
+                    "👥 アイドル・キャスト（idols.csv）": IDOL_MASTER_FILE,
+                    "👗 衣装マスター（costumes.csv）": COSTUME_MASTER_FILE,
+                    "💿 アルバム（albums.csv）": ALBUM_MASTER_FILE,
+                    "🎼 楽曲×アルバム（songs_albums.csv）": SONG_ALBUM_FILE,
+                    "🏷️ 楽曲区分（songs_categories.csv）": CATEGORY_FILE,
+                    "📝 歌詞（lyrics.csv）": LYRICS_FILE,
+                    "📅 出演・参加履歴（cast_attendance.csv）": ATTENDANCE_FILE,
+                    "📺 公式番組・配信履歴（broadcasts.csv）": BROADCAST_FILE,
+                    "🃏 カード実装履歴（cards.tsv）": CARD_FILE,
+                    "📻 シャニラジ出演履歴（shiny_radio_appearances.csv）": RADIO_APPEARANCE_FILE,
+                    "📻 シャニラジ各回データ（shiny_radio_episodes.tsv）": RADIO_EPISODE_FILE,
+                    "🎙️ オーコメ担当・Blu-ray版": COMMENTARY_BD_FILE,
+                    "🎙️ オーコメ担当・配信版": COMMENTARY_STREAM_FILE,
+                    "🖼️ ジャケット情報（release_jackets.csv）": JACKET_MAP_FILE,
+                    "🖼️ 曲別ジャケット（song_jackets.csv）": SONG_JACKET_FILE,
+                    "▶️ 公式音源リンク": YOUTUBE_AUDIO_DRAFT_FILE,
+                    "🎵 音源バージョン別リンク": YOUTUBE_AUDIO_VARIANTS_FILE,
+                    "🎵 Migratory Echoes・収録盤別音源": MIGRATORY_ECHOES_MEDIA_FILE,
+                    "🎬 MVリンク": YOUTUBE_VIDEO_VARIANTS_FILE,
+                    "🎬 ユニット・企画PVリンク": YOUTUBE_UNIT_PV_FILE,
+                    "📻 シャニラジ切り抜きリンク": YOUTUBE_RADIO_CLIP_FILE,
+                    "📡 公演AP生配信リンク": YOUTUBE_LIVE_AP_STREAM_FILE,
+                    "🎉 周年PVリンク": YOUTUBE_ANNIVERSARY_PV_FILE,
+                    "🎨 公演公式告知・ビジュアルリンク": EVENT_SOCIAL_LINKS_FILE,
+                    "🎥 ライブダイジェスト": YOUTUBE_LIVE_DIGEST_FILE,
+                    "🕶️ XR冒頭無料映像": YOUTUBE_XR_INTRO_FILE,
+                    "🌐 公演公式サイト": EVENT_OFFICIAL_SITE_FILE,
+                    "💴 価格推移（price_history.csv）": PRICE_HISTORY_FILE,
+                }
+                available_csv_targets = {
+                    label: path for label, path in csv_targets.items() if path and os.path.exists(path)
+                }
+                selected_csv_label = st.selectbox(
+                    "編集するCSVを選択:",
+                    list(available_csv_targets.keys()),
+                    key="tab7_csv_target",
                 )
-                st.success(
-                    f"保存しました。バックアップ: {os.path.basename(backup_path)}"
+                selected_csv_path = available_csv_targets[selected_csv_label]
+                selected_csv_df = load_csv(selected_csv_path).fillna("")
+
+                st.caption(f"{os.path.basename(selected_csv_path)} ｜ {len(selected_csv_df):,} 行 ｜ {len(selected_csv_df.columns)} 列")
+                edited_csv_df = st.data_editor(
+                    selected_csv_df,
+                    num_rows="dynamic",
+                    use_container_width=True,
+                    hide_index=True,
+                    key=f"csv_editor_{make_search_key(os.path.basename(selected_csv_path))}",
                 )
-                st.rerun()
+                st.warning("保存すると、選択中CSVの内容全体がこの表の内容に置き換わります。")
+                if st.button("💾 このCSVへ保存", key="save_selected_csv", type="primary"):
+                    backup_path = save_dataframe(
+                        edited_csv_df,
+                        selected_csv_path,
+                        create_backup=True,
+                    )
+                    st.success(
+                        f"保存しました。バックアップ: {os.path.basename(backup_path)}"
+                    )
+                    st.rerun()
 
     # TAB 8: 公演セットリスト分析
     with tab8:
@@ -5369,133 +5369,134 @@ if os.path.exists(SETLIST_FILE):
                                         unsafe_allow_html=True,
                                     )
 
-    # TAB 10: 歌詞キーワード検索
-    with tab10:
-        render_page_header(
-            "📚" if PUBLIC_MODE else "📝",
-            "楽曲情報" if PUBLIC_MODE else "歌詞キーワード検索",
-            "公開版では歌詞本文を掲載せず、楽曲データと公式リンクを案内します。" if PUBLIC_MODE else "言葉・関連する英語表現から歌詞を探し、該当箇所を色付きで確認できます。",
-        )
-
-        if PUBLIC_MODE:
-            st.info("公開版では歌詞本文・歌詞検索は掲載していません。公式の楽曲情報をご利用ください。")
-        elif lyrics_df.empty:
-            st.info(
-                "歌詞データが見つかりません。歌詞CSVをアプリと同じフォルダへ "
-                "`lyrics.csv` として配置してください。"
+    if not PUBLIC_MODE:
+        # TAB 10: 歌詞キーワード検索
+        with tab10:
+            render_page_header(
+                "📚" if PUBLIC_MODE else "📝",
+                "楽曲情報" if PUBLIC_MODE else "歌詞キーワード検索",
+                "公開版では歌詞本文を掲載せず、楽曲データと公式リンクを案内します。" if PUBLIC_MODE else "言葉・関連する英語表現から歌詞を探し、該当箇所を色付きで確認できます。",
             )
-        else:
-            search_col, mode_col, language_col = st.columns([2.2, 1.25, 1.55])
-            with search_col:
-                lyric_keyword = st.text_input(
-                    "検索したい言葉",
-                    placeholder="例: 夢、空、光、未来",
-                    key="lyrics_keyword",
-                ).strip()
-            with mode_col:
-                lyric_match_mode = st.radio(
-                    "一致方法",
-                    ["部分一致", "単語として検索"],
-                    horizontal=False,
-                    key="lyrics_match_mode",
-                    help="「単語として検索」は、たとえば「夢」で「夢中」を拾いにくくする検索です。日本語は助詞・記号に接している場合を単語として扱います。",
-                )
-            with language_col:
-                include_english_hint = st.checkbox(
-                    "関連する英語表現も探す",
-                    value=False,
-                    key="include_english_lyrics",
-                    help="夢→dream、光→light / shine など、登録済みの関連語を追加して検索します。",
-                )
-                extra_english = st.text_input(
-                    "英語の追加語（任意）",
-                    placeholder="例: wish, future",
-                    key="extra_english_lyrics",
-                )
 
-            st.caption(f"登録済み歌詞: {len(lyrics_df):,} 曲")
-            st.subheader("🔎 検索結果")
-            if lyric_keyword:
-                lyric_terms = build_lyric_search_terms(
-                    lyric_keyword,
-                    include_english=include_english_hint,
-                    extra_english=extra_english,
+            if PUBLIC_MODE:
+                st.info("公開版では歌詞本文・歌詞検索は掲載していません。公式の楽曲情報をご利用ください。")
+            elif lyrics_df.empty:
+                st.info(
+                    "歌詞データが見つかりません。歌詞CSVをアプリと同じフォルダへ "
+                    "`lyrics.csv` として配置してください。"
                 )
-                lyric_matches = lyrics_df[
-                    lyrics_df["歌詞"].map(
-                        lambda lyric: lyric_contains(
-                            lyric,
-                            lyric_terms,
-                            lyric_match_mode,
-                        )
-                    )
-                ].copy()
-
-                st.caption(
-                    "検索対象: "
-                    + " / ".join(f"「{term}」" for term in lyric_terms)
-                )
-                if lyric_matches.empty:
-                    st.warning("条件に一致する歌詞は見つかりませんでした。")
-                else:
-                    lyric_matches["歌詞の抜粋"] = lyric_matches["歌詞"].map(
-                        lambda lyric: make_lyric_excerpt(lyric, lyric_terms)
-                    )
-                    result_columns = [
-                        column
-                        for column in ["楽曲名", "アルバム", "リリース日", "歌唱者"]
-                        if column in lyric_matches.columns
-                    ]
-                    st.subheader(f"🎵 ヒットした楽曲一覧（{len(lyric_matches):,}曲）")
-                    st.dataframe(
-                        lyric_matches[result_columns].reset_index(drop=True),
-                        use_container_width=True,
-                        hide_index=True,
-                        height=min(360, 54 + len(lyric_matches) * 36),
-                    )
-                    result_metric_col, result_select_col = st.columns([1, 3])
-                    with result_metric_col:
-                        st.metric("見つかった楽曲", f"{len(lyric_matches):,} 曲")
-                    with result_select_col:
-                        selected_lyric_song = st.selectbox(
-                            "歌詞全体を確認する楽曲",
-                            lyric_matches["楽曲名"].tolist(),
-                            key="selected_lyric_song",
-                        )
-
-                    selected_lyric = lyric_matches[
-                        lyric_matches["楽曲名"] == selected_lyric_song
-                    ].iloc[0]
-                    st.markdown(
-                        f'<div class="lyric-result">{highlight_lyric_text(selected_lyric["歌詞"], lyric_terms)}</div>',
-                        unsafe_allow_html=True,
-                    )
-
             else:
-                st.info("キーワードを入力すると、該当する楽曲と歌詞の抜粋を表示します。")
-
-            with st.expander("🔤 よく使われる単語ランキング", expanded=False):
-                st.caption(
-                    "助詞・語尾を除外し、漢字語・カタカナ語・英単語を中心に集計しています。"
-                )
-                phrase_ranking_df = get_frequent_lyric_phrases(
-                    lyrics_df["歌詞"]
-                )
-                if phrase_ranking_df.empty:
-                    st.info("ランキングを作成できる歌詞がまだありません。")
-                else:
-                    st.dataframe(
-                        phrase_ranking_df.reset_index(drop=True),
-                        use_container_width=True,
-                        hide_index=True,
-                        height=420,
-                        column_config={
-                            "注目語": st.column_config.TextColumn(
-                                "注目語",
-                                width="large",
-                            )
-                        },
+                search_col, mode_col, language_col = st.columns([2.2, 1.25, 1.55])
+                with search_col:
+                    lyric_keyword = st.text_input(
+                        "検索したい言葉",
+                        placeholder="例: 夢、空、光、未来",
+                        key="lyrics_keyword",
+                    ).strip()
+                with mode_col:
+                    lyric_match_mode = st.radio(
+                        "一致方法",
+                        ["部分一致", "単語として検索"],
+                        horizontal=False,
+                        key="lyrics_match_mode",
+                        help="「単語として検索」は、たとえば「夢」で「夢中」を拾いにくくする検索です。日本語は助詞・記号に接している場合を単語として扱います。",
                     )
+                with language_col:
+                    include_english_hint = st.checkbox(
+                        "関連する英語表現も探す",
+                        value=False,
+                        key="include_english_lyrics",
+                        help="夢→dream、光→light / shine など、登録済みの関連語を追加して検索します。",
+                    )
+                    extra_english = st.text_input(
+                        "英語の追加語（任意）",
+                        placeholder="例: wish, future",
+                        key="extra_english_lyrics",
+                    )
+
+                st.caption(f"登録済み歌詞: {len(lyrics_df):,} 曲")
+                st.subheader("🔎 検索結果")
+                if lyric_keyword:
+                    lyric_terms = build_lyric_search_terms(
+                        lyric_keyword,
+                        include_english=include_english_hint,
+                        extra_english=extra_english,
+                    )
+                    lyric_matches = lyrics_df[
+                        lyrics_df["歌詞"].map(
+                            lambda lyric: lyric_contains(
+                                lyric,
+                                lyric_terms,
+                                lyric_match_mode,
+                            )
+                        )
+                    ].copy()
+
+                    st.caption(
+                        "検索対象: "
+                        + " / ".join(f"「{term}」" for term in lyric_terms)
+                    )
+                    if lyric_matches.empty:
+                        st.warning("条件に一致する歌詞は見つかりませんでした。")
+                    else:
+                        lyric_matches["歌詞の抜粋"] = lyric_matches["歌詞"].map(
+                            lambda lyric: make_lyric_excerpt(lyric, lyric_terms)
+                        )
+                        result_columns = [
+                            column
+                            for column in ["楽曲名", "アルバム", "リリース日", "歌唱者"]
+                            if column in lyric_matches.columns
+                        ]
+                        st.subheader(f"🎵 ヒットした楽曲一覧（{len(lyric_matches):,}曲）")
+                        st.dataframe(
+                            lyric_matches[result_columns].reset_index(drop=True),
+                            use_container_width=True,
+                            hide_index=True,
+                            height=min(360, 54 + len(lyric_matches) * 36),
+                        )
+                        result_metric_col, result_select_col = st.columns([1, 3])
+                        with result_metric_col:
+                            st.metric("見つかった楽曲", f"{len(lyric_matches):,} 曲")
+                        with result_select_col:
+                            selected_lyric_song = st.selectbox(
+                                "歌詞全体を確認する楽曲",
+                                lyric_matches["楽曲名"].tolist(),
+                                key="selected_lyric_song",
+                            )
+
+                        selected_lyric = lyric_matches[
+                            lyric_matches["楽曲名"] == selected_lyric_song
+                        ].iloc[0]
+                        st.markdown(
+                            f'<div class="lyric-result">{highlight_lyric_text(selected_lyric["歌詞"], lyric_terms)}</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                else:
+                    st.info("キーワードを入力すると、該当する楽曲と歌詞の抜粋を表示します。")
+
+                with st.expander("🔤 よく使われる単語ランキング", expanded=False):
+                    st.caption(
+                        "助詞・語尾を除外し、漢字語・カタカナ語・英単語を中心に集計しています。"
+                    )
+                    phrase_ranking_df = get_frequent_lyric_phrases(
+                        lyrics_df["歌詞"]
+                    )
+                    if phrase_ranking_df.empty:
+                        st.info("ランキングを作成できる歌詞がまだありません。")
+                    else:
+                        st.dataframe(
+                            phrase_ranking_df.reset_index(drop=True),
+                            use_container_width=True,
+                            hide_index=True,
+                            height=420,
+                            column_config={
+                                "注目語": st.column_config.TextColumn(
+                                    "注目語",
+                                    width="large",
+                                )
+                            },
+                        )
 
     # TAB 11: 公式番組・生配信履歴
     with tab11:
@@ -5839,8 +5840,9 @@ if os.path.exists(SETLIST_FILE):
     with tab14:
         render_schedule_prediction()
 
-    with tab15:
-        render_event_image_gallery()
+    if not PUBLIC_MODE:
+        with tab15:
+            render_event_image_gallery()
 
     with tab13:
         render_page_header(
