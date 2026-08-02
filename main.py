@@ -4,7 +4,8 @@ import os
 
 _APP_DIR = Path(__file__).resolve().parent
 _CORE_FILE = _APP_DIR / "main_app_core.py"
-APP_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "local")).casefold()
+# 公開リポジトリでは、Streamlit の起動ファイルに main.py を指定しても公開モードにする。
+APP_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "public")).casefold()
 
 from schedule_prediction import render_schedule_prediction
 
