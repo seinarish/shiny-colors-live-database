@@ -1010,6 +1010,24 @@ st.markdown(
     .ranking-card-meta div { display: flex; gap: 0.25rem; }
     .ranking-card-meta dt { color: #6d6899 !important; font-size: 0.8rem; }
     .ranking-card-meta dd { margin: 0; color: #35335e !important; font-size: 0.8rem; font-weight: 700; }
+    @media (min-width: 901px) {
+        .ranking-card-list {
+            grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+            gap: 0.75rem;
+        }
+        .ranking-card {
+            min-height: 7.8rem;
+            padding: 0.8rem 0.9rem;
+        }
+        .ranking-card-meta {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.4rem 0.7rem;
+        }
+        .ranking-card-meta div:last-child {
+            grid-column: 1 / -1;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
