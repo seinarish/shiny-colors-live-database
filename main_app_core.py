@@ -2607,8 +2607,9 @@ if os.path.exists(SETLIST_FILE):
         df["アルバム登録済"] = True
 
     # バックアップ・出力
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📥 バックアップ・出力")
+    if not PUBLIC_MODE:
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📥 バックアップ・出力")
     csv_buffer = io.StringIO()
     df.drop(
         columns=[
@@ -2622,12 +2623,13 @@ if os.path.exists(SETLIST_FILE):
         ],
         errors="ignore",
     ).to_csv(csv_buffer, index=False, encoding="utf-8-sig")
-    st.sidebar.download_button(
-        label="📄 最新セットリストCSVを出力",
-        data=csv_buffer.getvalue(),
-        file_name=f"shiny_live_songs_{datetime.now().strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-    )
+    if not PUBLIC_MODE:
+        st.sidebar.download_button(
+            label="📄 最新セットリストCSVを出力",
+            data=csv_buffer.getvalue(),
+            file_name=f"shiny_live_songs_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+        )
 
     # ------------------------------------------
     # 入口を「ホーム」にし、はじめて使う人にも分析の出発点が見える構成にする。
@@ -2657,6 +2659,21 @@ if os.path.exists(SETLIST_FILE):
             "🖼️ イベント画像",
         ]
     )
+
+    if PUBLIC_MODE:
+        # 公開版では、編集・歌詞本文・ローカル画像の入口を表示しない。
+        st.markdown(
+            """
+            <style>
+            [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(8),
+            [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(11),
+            [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(16) {
+                display: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
     # TAB 0: ホーム
     with tab0:
