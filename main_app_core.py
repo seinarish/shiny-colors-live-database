@@ -3014,15 +3014,15 @@ if os.path.exists(SETLIST_FILE):
             st.markdown("### 📋 ランキング詳細一覧")
             ranking_cards = []
             for _, rank_row in display_rank.iterrows():
-                rank_number = int(rank_row["??"])
+                rank_number = int(rank_row["順位"])
                 ranking_cards.append(
                     f"<article class='ranking-card ranking-card--{min(rank_number, 4)}'>"
                     f"<div class='ranking-card-title'><span class='ranking-card-rank'>{rank_number}</span>"
                     f"<strong>{html.escape(str(rank_row[rank_target]))}</strong></div>"
                     f"<dl class='ranking-card-meta'>"
                     f"<div><dt>{html.escape(str(count_col_name))}</dt><dd>{html.escape(str(rank_row[count_col_name]))}</dd></div>"
-                    f"<div><dt>?????</dt><dd>{html.escape(str(rank_row['?????']))}</dd></div>"
-                    f"<div><dt>???????</dt><dd>{html.escape(str(rank_row['???????']))}</dd></div>"
+                    f"<div><dt>最終披露日</dt><dd>{html.escape(str(rank_row['最終披露日']))}</dd></div>"
+                    f"<div><dt>前回からの経過</dt><dd>{html.escape(str(rank_row['前回からの経過']))}</dd></div>"
                     f"</dl></article>"
                 )
             st.markdown(
