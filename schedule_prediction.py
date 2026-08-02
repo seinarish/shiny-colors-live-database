@@ -822,5 +822,11 @@ def render_schedule_prediction() -> None:
     result = _enforce_order_constraints(result, order_constraints)
     result = result.sort_values("予想日", kind="stable")
     st.subheader("予想結果")
-    st.dataframe(result.drop(columns="_column"), use_container_width=True, hide_index=True)
-    st.caption("今回のチケット構成に近い過去公演を優先し、その中で日数が最も密集したグループを使います。予測が販売順を破った場合は、「順序補正」に理由を表示して後ろの日程を調整します。")
+    public_result = result[["項目", "予想日", "目安の範囲", "信頼度"]].rename(
+        columns={
+            "項目": "チケット種別",
+            "目安の範囲": "誤差",
+            "信頼度": "信頼性",
+        }
+    )
+    st.dataframe(public_result, use_container_width=True, hide_index=True)
