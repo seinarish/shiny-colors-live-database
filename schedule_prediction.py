@@ -693,9 +693,11 @@ def render_schedule_prediction() -> None:
     event_type_options = ["すべて"]
     if "_event_type" in history.columns:
         event_type_options += sorted(value for value in history["_event_type"].dropna().unique() if value)
-    if selected_test_row is not None and selected_test_row.get("_event_type", "") in event_type_options:
-        selected_event_type = selected_test_row["_event_type"]
-        st.caption(f"公演形式：{selected_event_type}")
+    if selected_test_row is not None:
+        # 過去公演の検証では、その公演に紐づく条件を自動で利用する。
+        selected_event_type = _clean_text(selected_test_row.get("_event_type", ""))
+        if selected_event_type:
+            st.caption(f"公演形式：{selected_event_type}")
     else:
         selected_event_type = st.selectbox("公演形式", event_type_options, key="prediction_event_type")
 

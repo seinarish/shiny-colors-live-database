@@ -757,6 +757,11 @@ st.markdown(
         font-size: 0.76rem !important;
         letter-spacing: 0 !important;
     }
+    .stTabs [data-baseweb="tab"] * {
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        overflow-wrap: normal !important;
+    }
     .stTabs [aria-selected="true"] {
         border-radius: 9px !important;
         clip-path: none !important;
