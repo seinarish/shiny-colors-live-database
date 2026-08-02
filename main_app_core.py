@@ -2639,40 +2639,24 @@ if os.path.exists(SETLIST_FILE):
         None,
     )
     home_costume_col = next((c for c in df.columns if "衣装" in c), None)
-    tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs(
-        [
-            "✨ ホーム",
-            "📊 分析",
-            "🎵 楽曲",
-            "🎤 歌唱・衣装",
-            "👗 衣装",
-            "🎲 ガチャ",
-            "🔍 検索",
-            "➕ データ管理",
-            "🏟️ 公演",
-            "👥 参加履歴",
-            "📚 楽曲情報" if PUBLIC_MODE else "📝 歌詞",
-            "📺 番組・配信",
-            "🗓️ カレンダー",
-            "💴 価格推移",
-            "📅 スケジュール予想",
-            "🖼️ イベント画像",
-        ]
-    )
-
     if PUBLIC_MODE:
-        # 公開版では、編集・歌詞本文・ローカル画像の入口を表示しない。
-        st.markdown(
-            """
-            <style>
-            [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(8),
-            [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(11),
-            [data-baseweb="tab-list"] [data-baseweb="tab"]:nth-child(16) {
-                display: none !important;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True,
+        # 公開版には、編集・歌詞本文・ローカル画像のタブをそもそも作らない。
+        tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab8, tab9, tab11, tab12, tab13, tab14 = st.tabs(
+            [
+                "✨ ホーム", "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装",
+                "🎲 ガチャ", "🔍 検索", "🏟️ 公演", "👥 参加履歴", "📺 番組・配信",
+                "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想",
+            ]
+        )
+        _private_tab_placeholder = st.empty()
+        tab7 = tab10 = tab15 = _private_tab_placeholder.container()
+    else:
+        tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs(
+            [
+                "✨ ホーム", "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装", "🎲 ガチャ",
+                "🔍 検索", "➕ データ管理", "🏟️ 公演", "👥 参加履歴", "📝 歌詞",
+                "📺 番組・配信", "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想", "🖼️ イベント画像",
+            ]
         )
 
     # TAB 0: ホーム
@@ -6291,6 +6275,10 @@ if os.path.exists(SETLIST_FILE):
                     render_analysis_chart(trend_chart, key="tab13_total_performance_trend")
                 else:
                     st.info("日付データを登録すると、年ごとの公演・披露回数を表示できます。")
+
+    if PUBLIC_MODE:
+        # 非公開タブのコンテナを最後に消し、編集フォーム等を公開画面に残さない。
+        _private_tab_placeholder.empty()
 
 else:
     st.warning("⚠️ `songs.csv` が見つかりません。配置をご確認ください。")
