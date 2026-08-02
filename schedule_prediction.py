@@ -645,38 +645,18 @@ def render_schedule_prediction() -> None:
         st.error("予想に使える日程列が見つかりませんでした。")
         return
 
-    test_options: list[int | None] = [None, *history.index.tolist()]
-    selected_test_index = st.selectbox(
-        "過去公演を選んで予測を試す",
-        test_options,
-        format_func=lambda index: "手入力で予測する" if index is None else str(history.at[index, _EVENT_NAME]),
-        key="prediction_test_event",
-        help="選んだ公演の実際の日程は学習から隠し、発表日・DAY1・チケット構成だけで予測します。",
-    )
-
-    selected_test_row = history.loc[selected_test_index] if selected_test_index is not None else None
-    if selected_test_row is None:
-        input_col1, input_col2 = st.columns(2)
-        with input_col1:
-            announcement_input = st.date_input("発表日（任意）", value=None, key="prediction_announcement")
-        with input_col2:
-            day1_input = st.date_input("DAY1（任意）", value=None, key="prediction_day1")
-        if not announcement_input and not day1_input:
-            st.info("発表日またはDAY1を入力してください。")
-            return
-        announcement = pd.Timestamp(announcement_input) if announcement_input else None
-        event_day1 = pd.Timestamp(day1_input) if day1_input else None
-        prediction_history = history
-    else:
-        announcement = _parse_date(selected_test_row[_ANNOUNCEMENT])
-        event_day1 = _parse_date(selected_test_row[_DAY1])
-        if pd.isna(announcement) or pd.isna(event_day1):
-            st.warning("この公演は発表日またはDAY1が不足しているため、選択検証には使えません。")
-            return
-        prediction_history = history.drop(index=selected_test_index)
-        st.info(
-            f"発表日：{announcement.strftime('%Y/%m/%d')}　／　DAY1：{event_day1.strftime('%Y/%m/%d')}　／　DAY2：{(event_day1 + pd.Timedelta(days=1)).strftime('%Y/%m/%d')}"
-        )
+    selected_test_row = None
+    input_col1, input_col2 = st.columns(2)
+    with input_col1:
+        announcement_input = st.date_input("???????", value=None, key="prediction_announcement")
+    with input_col2:
+        day1_input = st.date_input("DAY1????", value=None, key="prediction_day1")
+    if not announcement_input and not day1_input:
+        st.info("??????DAY1??????????")
+        return
+    announcement = pd.Timestamp(announcement_input) if announcement_input else None
+    event_day1 = pd.Timestamp(day1_input) if day1_input else None
+    prediction_history = history
 
     as_of_input = st.date_input(
         "予測の基準日（今日）",
