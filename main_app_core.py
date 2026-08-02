@@ -25,6 +25,34 @@ from event_image_gallery import (
 
 PUBLIC_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "local")).casefold() == "public"
 
+
+def _clean_public_table_text(data):
+    """公開版の表だけ、データ内の区切り記号を読みやすく整える。"""
+    if not isinstance(data, pd.DataFrame):
+        return data
+    display_data = data.copy()
+    for column in display_data.columns:
+        if pd.api.types.is_object_dtype(display_data[column]) or pd.api.types.is_string_dtype(display_data[column]):
+            display_data[column] = display_data[column].map(
+                lambda value: value.replace(";", "・").replace("；", "・") if isinstance(value, str) else value
+            )
+    return display_data
+
+
+if PUBLIC_MODE:
+    # 元データや集計用の区切り文字は保持し、公開画面の表だけを整形する。
+    _original_dataframe = st.dataframe
+    _original_table = st.table
+
+    def _public_dataframe(data, *args, **kwargs):
+        return _original_dataframe(_clean_public_table_text(data), *args, **kwargs)
+
+    def _public_table(data, *args, **kwargs):
+        return _original_table(_clean_public_table_text(data), *args, **kwargs)
+
+    st.dataframe = _public_dataframe
+    st.table = _public_table
+
 # ------------------------------------------
 # 1. ページ初期設定＆シャニマス公式風（クリスタル＆虹色グラデーション）CSS
 # ------------------------------------------
@@ -2641,11 +2669,11 @@ if os.path.exists(SETLIST_FILE):
     home_costume_col = next((c for c in df.columns if "衣装" in c), None)
     if PUBLIC_MODE:
         # 公開版には、編集・歌詞本文・ローカル画像のタブをそもそも作らない。
-        tab0, tab1, tab2, tab3, tab4, tab6, tab8, tab9, tab11, tab12, tab13, tab14 = st.tabs(
+        tab0, tab1, tab2, tab3, tab4, tab6, tab8, tab9, tab11, tab12, tab13, tab14, tab16 = st.tabs(
             [
                 "✨ ホーム", "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装",
                 "🔍 検索", "🏟️ 公演", "👥 参加履歴", "📺 番組・配信",
-                "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想",
+                "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想", "📚 分類ガイド",
             ]
         )
     else:
@@ -5829,6 +5857,65 @@ if os.path.exists(SETLIST_FILE):
     if not PUBLIC_MODE:
         with tab15:
             render_event_image_gallery()
+
+    if PUBLIC_MODE:
+        with tab16:
+            render_page_header(
+                "📚",
+                "分類ガイド",
+                "このサイト内でデータを見やすくするために使っている独自の分類です。公式の呼称・区分とは一致しない場合があります。",
+            )
+            st.info("分類は検索や集計をしやすくするための管理上の目安です。公式発表の分類ではありません。")
+
+            st.subheader("🏟️ 公演区分")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        ["キャストライブ", "シャイニーカラーズの出演者を中心としたライブ公演"],
+                        ["XR", "XR・バーチャル形式で行われるライブ"],
+                        ["発売記念イベント", "CD・映像作品などの発売に関連するイベント"],
+                        ["合同", "複数ブランドが出演する公式イベント"],
+                        ["外部", "ブランド外を主とするイベントへの出演"],
+                        ["その他", "上記に当てはまらないイベント・企画"],
+                        ["未設定", "分類を確認・整理中のデータ"],
+                    ],
+                    columns=["分類", "このサイトでの扱い"],
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.subheader("🎵 楽曲区分")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        ["オリジナル", "シャイニーカラーズの楽曲として扱う曲"],
+                        ["合同", "複数ブランド・合同企画に関わる楽曲"],
+                        ["カバー", "他作品・他アーティストの楽曲をカバーしたもの"],
+                        ["外部", "外部作品・企画に関わる楽曲"],
+                        ["その他", "上記に当てはまらない特別な扱いの楽曲"],
+                        ["未分類", "分類を確認・整理中の楽曲"],
+                    ],
+                    columns=["分類", "このサイトでの扱い"],
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.subheader("📈 価格推移の公演分類")
+            st.caption("価格推移の一部グラフでは、比較用にさらに大まかな分類を使っています。")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        ["周年ライブ", "名称から周年ライブと判断できる公演"],
+                        ["シャニソンライブ", "シャニソン関連として扱う公演"],
+                        ["その他", "上記以外の公演"],
+                    ],
+                    columns=["分類", "このサイトでの扱い"],
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
 
     with tab13:
         render_page_header(
