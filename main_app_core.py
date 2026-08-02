@@ -3240,10 +3240,14 @@ if os.path.exists(SETLIST_FILE):
                 else (str(selected_album_row.iloc[0][song_alb_col]) if not selected_album_row.empty else "")
             )
             selected_jacket_path = get_song_jacket_path(selected_song, selected_album) if selected_album else None
-            jacket_col, album_info_col, media_col = st.columns([1, 1.35, 1.35])
-            with jacket_col:
-                if selected_jacket_path:
-                    st.image(selected_jacket_path, use_container_width=True)
+            if PUBLIC_MODE:
+                # 画像ファイルは公開せず、公式YouTubeの再生画面を主役にする。
+                album_info_col, media_col = st.columns([1, 1.55])
+            else:
+                jacket_col, album_info_col, media_col = st.columns([1, 1.35, 1.35])
+                with jacket_col:
+                    if selected_jacket_path:
+                        st.image(selected_jacket_path, use_container_width=True)
             with album_info_col:
                 if selected_album:
                     st.subheader("💿 収録アルバム")
