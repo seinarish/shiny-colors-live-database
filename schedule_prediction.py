@@ -690,45 +690,17 @@ def render_schedule_prediction() -> None:
         event_day2 = pd.Timestamp(event_day1) + pd.Timedelta(days=1)
         st.caption(f"DAY2はDAY1の翌日として扱います：{event_day2.strftime('%Y/%m/%d')}")
 
-    event_type_options = ["すべて"]
-    if "_event_type" in history.columns:
-        event_type_options += sorted(value for value in history["_event_type"].dropna().unique() if value)
     if selected_test_row is not None:
-        # 過去公演の検証では、その公演に紐づく条件を自動で利用する。
+        # ???????????????????????????????????
         selected_event_type = _clean_text(selected_test_row.get("_event_type", ""))
-        if selected_event_type:
-            st.caption(f"公演形式：{selected_event_type}")
-    else:
-        selected_event_type = st.selectbox("公演形式", event_type_options, key="prediction_event_type")
-
-    selected_season = _season_from_date(event_day1)
-    if selected_test_row is not None:
         selected_series = _clean_text(selected_test_row.get("_event_series", ""))
         selected_venue_scale = _clean_text(selected_test_row.get("_venue_scale", ""))
-        context_labels = [
-            f"シリーズ：{selected_series}" if selected_series else "",
-            f"会場規模：{selected_venue_scale}" if selected_venue_scale else "",
-            f"季節：{selected_season}" if selected_season else "",
-        ]
-        if any(context_labels):
-            st.caption("自動判定：" + "／".join(label for label in context_labels if label))
     else:
-        context_col1, context_col2 = st.columns(2)
-        with context_col1:
-            event_name_hint = st.text_input("公演名・シリーズ（任意）", key="prediction_event_name_hint")
-            selected_series = _event_series(event_name_hint)
-            if selected_series:
-                st.caption(f"シリーズを自動判定：{selected_series}")
-        with context_col2:
-            selected_venue_scale = st.selectbox(
-                "会場規模（任意）",
-                ["指定なし", "ライブハウス級", "ホール級", "アリーナ級", "ドーム級"],
-                key="prediction_venue_scale",
-            )
-            if selected_venue_scale == "指定なし":
-                selected_venue_scale = ""
-        if selected_season:
-            st.caption(f"DAY1から季節を自動判定：{selected_season}")
+        selected_event_type = ""
+        selected_series = ""
+        selected_venue_scale = ""
+
+    selected_season = _season_from_date(event_day1)
 
     st.subheader("今回あるチケット種別")
     st.caption("当てはまるチケット種別だけをオンにしてください。グッズ・キービジュアルなどの予定は常に表示します。")

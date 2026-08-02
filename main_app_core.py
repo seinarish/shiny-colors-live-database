@@ -762,6 +762,27 @@ st.markdown(
         word-break: keep-all !important;
         overflow-wrap: normal !important;
     }
+    /* Streamlitの実際のタブボタンにも直接指定し、スマホで1文字ずつ折れないようにする。 */
+    .stTabs button[role="tab"],
+    .stTabs button[role="tab"] * {
+        width: max-content !important;
+        min-width: max-content !important;
+        white-space: nowrap !important;
+        word-break: keep-all !important;
+        overflow-wrap: normal !important;
+    }
+    @media (max-width: 900px) {
+        .stTabs [data-baseweb="tab-list"] {
+            overflow-x: scroll !important;
+            overscroll-behavior-x: contain;
+            -webkit-overflow-scrolling: touch;
+        }
+        div[data-baseweb="popover"],
+        ul[role="listbox"] {
+            max-height: 38vh !important;
+            overflow-y: auto !important;
+        }
+    }
     .stTabs [aria-selected="true"] {
         border-radius: 9px !important;
         clip-path: none !important;
