@@ -896,7 +896,7 @@ st.markdown(
     """
     <div class="shiny-header">
         <div class="shiny-title">✨ SHINY COLORS LIVE DATABASE ✨</div>
-        <div class="shiny-subtitle">アイドルマスター シャイニーカラーズ ライブ歌唱分析システム</div>
+        <div class="shiny-subtitle">アイドルマスター シャイニーカラーズ ライブデータベース</div>
     </div>
     """,
     unsafe_allow_html=True
@@ -2682,7 +2682,7 @@ if os.path.exists(SETLIST_FILE):
         metric_cols[0].metric("分析対象の公演", f"{home_event_count:,} 件")
         metric_cols[1].metric("披露楽曲", f"{home_song_count:,} 曲")
         metric_cols[2].metric("歌唱者", f"{home_performer_count:,} 人")
-        metric_cols[3].metric("登録衣装", f"{home_costume_count:,} 種")
+        metric_cols[3].metric("衣装", f"{home_costume_count:,} 種")
 
         latest_event_row = pd.DataFrame()
         if "日付_dt" in df.columns:
@@ -2698,7 +2698,7 @@ if os.path.exists(SETLIST_FILE):
                     f"{latest['日付_dt'].strftime('%Y/%m/%d')}"
                 )
                 latest_setlist = df[df["公演名"] == latest.get("公演名")]
-                st.caption(f"この公演の登録曲数: {len(latest_setlist):,} 曲")
+                st.caption(f"セットリスト掲載曲: {len(latest_setlist):,} 曲")
                 preview_columns = [c for c in ["曲順", "楽曲名", home_singer_col, home_costume_col] if c and c in latest_setlist.columns]
                 preview_df = latest_setlist[preview_columns].head(8).reset_index(drop=True).copy()
                 if home_singer_col and home_singer_col in preview_df.columns:
@@ -2725,7 +2725,7 @@ if os.path.exists(SETLIST_FILE):
                 - **楽曲詳細分析**：曲の披露履歴、収録アルバム、ジャケットを確認する
                 - **歌唱者×楽曲・衣装分析**：キャスト／アイドルごとの歌唱・衣装履歴を見る
                 - **公演セットリスト分析**：公演ごとの曲順と前回披露からの間隔を見る
-                - **歌詞キーワード検索**：好きな言葉から曲を発見する
+                - **楽曲・公演検索**：気になる曲や公演を探す
                 """
             )
             if not lyrics_df.empty:
@@ -2809,13 +2809,13 @@ if os.path.exists(SETLIST_FILE):
         with col_rank_order:
             rank_order = st.selectbox(
                 "📐 並び替え順:",
-                ["多い順", "少ない順", "ご無沙汰順（最終披露からの経過日数）"],
+                ["多い順", "少ない順", "前回披露から長い順"],
                 key="rank_order"
             )
         with col_rank_unit:
             if rank_target == "衣装":
                 costume_count_unit = st.selectbox(
-                    "👗 衣装着用数のカウント方法:",
+                    "👗 衣装の集計方法:",
                     ["楽曲数（パフォーマンス数）", "公演数（イベント数）"],
                     key="costume_count_unit"
                 )
@@ -3475,7 +3475,7 @@ if os.path.exists(SETLIST_FILE):
             st.markdown("---")
 
             if len(singer_df) > 0 and costume_col:
-                st.subheader(f"👗 「{selected_person}」の衣装着用サマリー")
+                st.subheader(f"👗 「{selected_person}」の衣装着用記録")
 
                 tab3_series_col = (
                     next((c for c in costume_master_df.columns if "シリーズ" in c), None)
@@ -3799,8 +3799,8 @@ if os.path.exists(SETLIST_FILE):
     with tab6:
         render_page_header(
             "🔍",
-            "データ検索・全データ",
-            "登録内容を横断検索し、分類漏れや元データもまとめて確認できます。",
+            "楽曲・公演検索" if PUBLIC_MODE else "データ検索・全データ",
+            "楽曲名・公演名・歌唱者・衣装から記録を探せます。" if PUBLIC_MODE else "登録内容を横断検索し、分類漏れや元データもまとめて確認できます。",
         )
         searchable_columns = [
             column
@@ -3845,7 +3845,7 @@ if os.path.exists(SETLIST_FILE):
                 )
             searched_df = df[search_mask]
 
-        if "楽曲区分" in df.columns:
+        if not PUBLIC_MODE and "楽曲区分" in df.columns:
             unclassified_df = df[df["楽曲区分"] == "未分類"]
             if len(unclassified_df) > 0:
                 with st.expander(
