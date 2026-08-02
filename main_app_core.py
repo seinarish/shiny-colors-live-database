@@ -2716,12 +2716,16 @@ if os.path.exists(SETLIST_FILE):
                 latest_setlist = df[df["公演名"] == latest.get("公演名")]
                 st.caption(f"この公演の登録曲数: {len(latest_setlist):,} 曲")
                 preview_columns = [c for c in ["曲順", "楽曲名", home_singer_col, home_costume_col] if c and c in latest_setlist.columns]
-                st.dataframe(
-                    latest_setlist[preview_columns].head(8).reset_index(drop=True),
-                    use_container_width=True,
-                    height=285,
-                    hide_index=True,
-                )
+                preview_df = latest_setlist[preview_columns].head(8).reset_index(drop=True).copy()
+                if home_singer_col and home_singer_col in preview_df.columns:
+                    preview_df[home_singer_col] = (
+                        preview_df[home_singer_col]
+                        .fillna("")
+                        .astype(str)
+                        .str.replace(";", "・", regex=False)
+                        .str.replace("；", "・", regex=False)
+                    )
+                st.table(preview_df)
             else:
                 st.info("日付を含む公演データを登録すると、ここに最新公演を表示します。")
         with guide_col:
