@@ -1097,6 +1097,8 @@ def clean_text(text):
     if not isinstance(text, str):
         return text
     text = re.sub(r"(br|Td)\s*\{[^}]*\}", "", text, flags=re.IGNORECASE)
+    # 全角・半角の記号差で、楽曲・衣装・出演者などが別データにならないよう統一する。
+    text = text.translate(str.maketrans({"！": "!", "？": "?", "＆": "&", "／": "/", "：": ":"}))
     text = text.replace("　", " ").strip()
     return re.sub(r"\s+", " ", text)
 
