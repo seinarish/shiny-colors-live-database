@@ -2641,15 +2641,15 @@ if os.path.exists(SETLIST_FILE):
     home_costume_col = next((c for c in df.columns if "衣装" in c), None)
     if PUBLIC_MODE:
         # 公開版には、編集・歌詞本文・ローカル画像のタブをそもそも作らない。
-        tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab8, tab9, tab11, tab12, tab13, tab14 = st.tabs(
+        tab0, tab1, tab2, tab3, tab4, tab6, tab8, tab9, tab11, tab12, tab13, tab14 = st.tabs(
             [
                 "✨ ホーム", "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装",
-                "🎲 ガチャ", "🔍 検索", "🏟️ 公演", "👥 参加履歴", "📺 番組・配信",
+                "🔍 検索", "🏟️ 公演", "👥 参加履歴", "📺 番組・配信",
                 "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想",
             ]
         )
         _private_tab_placeholder = st.empty()
-        tab7 = tab10 = tab15 = _private_tab_placeholder.container()
+        tab5 = tab7 = tab10 = tab15 = _private_tab_placeholder.container()
     else:
         tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13, tab14, tab15 = st.tabs(
             [
