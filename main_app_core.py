@@ -2725,7 +2725,12 @@ if os.path.exists(SETLIST_FILE):
                         .str.replace(";", "・", regex=False)
                         .str.replace("；", "・", regex=False)
                     )
-                st.table(preview_df)
+                st.dataframe(
+                    preview_df,
+                    use_container_width=True,
+                    height=285,
+                    hide_index=True,
+                )
             else:
                 st.info("日付を含む公演データを登録すると、ここに最新公演を表示します。")
         with guide_col:
