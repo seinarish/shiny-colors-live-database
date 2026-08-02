@@ -648,11 +648,11 @@ def render_schedule_prediction() -> None:
     selected_test_row = None
     input_col1, input_col2 = st.columns(2)
     with input_col1:
-        announcement_input = st.date_input("???????", value=None, key="prediction_announcement")
+        announcement_input = st.date_input("発表日（任意）", value=None, key="prediction_announcement")
     with input_col2:
-        day1_input = st.date_input("DAY1????", value=None, key="prediction_day1")
+        day1_input = st.date_input("DAY1（任意）", value=None, key="prediction_day1")
     if not announcement_input and not day1_input:
-        st.info("??????DAY1??????????")
+        st.info("発表日またはDAY1を入力してください。")
         return
     announcement = pd.Timestamp(announcement_input) if announcement_input else None
     event_day1 = pd.Timestamp(day1_input) if day1_input else None
