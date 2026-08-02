@@ -940,6 +940,33 @@ st.markdown(
             font-size: 1.55rem !important;
         }
     }
+    /* モバイルの主タブは縮小せず、横にスワイプして選ぶ。 */
+    @media (max-width: 900px) {
+        .stTabs [role="tablist"],
+        .stTabs [data-baseweb="tab-list"] {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            width: 100% !important;
+            overflow-x: auto !important;
+            overflow-y: hidden !important;
+            -webkit-overflow-scrolling: touch !important;
+        }
+        .stTabs [role="tab"],
+        .stTabs button[role="tab"],
+        .stTabs [data-baseweb="tab"] {
+            display: inline-flex !important;
+            flex: 0 0 auto !important;
+            width: auto !important;
+            min-width: max-content !important;
+            max-width: none !important;
+            white-space: nowrap !important;
+        }
+        .stTabs [role="tab"] * {
+            white-space: nowrap !important;
+            word-break: keep-all !important;
+            overflow-wrap: normal !important;
+        }
+    }
     </style>
     """,
     unsafe_allow_html=True,
