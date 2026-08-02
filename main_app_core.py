@@ -4789,7 +4789,7 @@ if os.path.exists(SETLIST_FILE):
                 kind="stable",
                 na_position="last",
             )
-            filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 1.4])
+            filter_col1, filter_col2 = st.columns(2)
             available_event_years = sorted(
                 event_catalog["日付_dt"].dropna().dt.year.unique().tolist(), reverse=True
             )
@@ -4842,26 +4842,12 @@ if os.path.exists(SETLIST_FILE):
                 selected_event_categories = [
                     category for category in available_event_categories if category in active_categories
                 ]
-            with filter_col3:
-                event_keyword = st.text_input(
-                    "公演名・会場・出演者で絞り込み",
-                    placeholder="例: 6thLIVE、ノクチル、Kアリーナ",
-                    key="tab8_event_keyword_filter",
-                )
             event_catalog = event_catalog[
                 event_catalog["日付_dt"].dt.year.isin(selected_event_years)
             ]
             event_catalog = event_catalog[
                 event_catalog["公演区分"].fillna("未分類").astype(str).isin(selected_event_categories)
             ]
-            if event_keyword.strip():
-                event_key = event_keyword.strip()
-                matching_lives = df[
-                    df.astype(str).apply(
-                        lambda column: column.str.contains(event_key, case=False, na=False, regex=False)
-                    ).any(axis=1)
-                ][live_col_name].unique()
-                event_catalog = event_catalog[event_catalog[live_col_name].isin(matching_lives)]
             event_options = []
             event_lookup = {}
             for event_row in event_catalog.to_dict("records"):
