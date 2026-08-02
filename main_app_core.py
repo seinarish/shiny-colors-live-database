@@ -2340,18 +2340,71 @@ if os.path.exists(SETLIST_FILE):
         st.markdown(
             """
             <style>
-            html, body, [data-testid="stAppViewContainer"], [data-testid="stDataFrame"] {
+            :root, html, body, [data-testid="stAppViewContainer"], [data-testid="stDataFrame"] {
                 color-scheme: light !important;
+            }
+            html, body, [data-testid="stAppViewContainer"] {
+                background: linear-gradient(135deg, #ffffff 0%, #f4f0ff 35%, #e8f7ff 70%, #fff0f5 100%) !important;
+                color: #2c2c54 !important;
+            }
+            p, span, div, label, .stMarkdown, .stSelectbox label, .stRadio label {
+                color: #2c2c54 !important;
+            }
+            [data-testid="stSidebar"] {
+                background: rgba(255, 255, 255, 0.94) !important;
+                border-right-color: rgba(123, 92, 255, 0.22) !important;
             }
             [data-testid="stDataFrame"] [role="grid"],
             [data-testid="stDataFrame"] [role="gridcell"],
             [data-testid="stDataFrame"] [role="columnheader"] {
                 background-color: #ffffff !important;
                 color: #2c2c54 !important;
+                border-color: #deddf0 !important;
             }
             [data-testid="stDataFrame"] [role="columnheader"] {
                 background-color: #f4f0ff !important;
             }
+            [data-testid="stDataFrame"] div,
+            [data-testid="stDataFrame"] span {
+                color: #2c2c54 !important;
+            }
+            div[data-baseweb="select"],
+            div[data-baseweb="select"] > div,
+            div[data-baseweb="popover"],
+            div[data-baseweb="menu"],
+            ul[role="listbox"],
+            div[role="option"] {
+                background-color: #ffffff !important;
+                color: #2c2c54 !important;
+            }
+            div[data-baseweb="popover"] *,
+            div[data-baseweb="menu"] *,
+            div[role="option"] * {
+                color: #2c2c54 !important;
+            }
+            [data-testid="stMetric"], .shiny-header {
+                background: rgba(255, 255, 255, 0.92) !important;
+                border-color: rgba(123, 92, 255, 0.25) !important;
+            }
+            .app-page-header,
+            .analysis-target-card,
+            [data-testid="stExpander"] {
+                background: rgba(255, 255, 255, 0.9) !important;
+                border-color: rgba(123, 92, 255, 0.2) !important;
+            }
+            .app-page-title, .analysis-target-title, [data-testid="stMetricValue"] {
+                color: #2c2c54 !important;
+            }
+            .app-page-description, .analysis-target-meta, [data-testid="stMetricLabel"] {
+                color: #62627d !important;
+            }
+            div.stButton > button[kind="secondary"] {
+                background: #ffffff !important;
+                color: #5a45d6 !important;
+                border-color: #b9afe8 !important;
+            }
+            .stTabs [data-baseweb="tab-list"] { background-color: #ffffff !important; }
+            .stTabs [data-baseweb="tab"] { color: #4b467c !important; }
             </style>
             """,
             unsafe_allow_html=True,
