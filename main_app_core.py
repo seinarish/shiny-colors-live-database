@@ -2247,12 +2247,9 @@ if os.path.exists(SETLIST_FILE):
             f"データ最終更新: {latest_source_update.strftime('%Y/%m/%d %H:%M')}"
         )
 
-    display_mode = st.sidebar.radio(
-        "🎨 表示モード",
-        ["ライト", "ダーク"],
-        horizontal=True,
-        key="display_mode",
-    )
+    # 表・選択欄の表示がOSのダークモードに引っ張られないよう、当面はライト表示に固定する。
+    display_mode = "ライト"
+    st.sidebar.caption("🎨 表示：ライト固定")
 
     if display_mode == "ダーク":
         st.markdown(
@@ -2367,6 +2364,16 @@ if os.path.exists(SETLIST_FILE):
             [data-testid="stDataFrame"] div,
             [data-testid="stDataFrame"] span {
                 color: #2c2c54 !important;
+            }
+            [data-testid="stDataFrame"] {
+                --gdg-bg-cell: #ffffff !important;
+                --gdg-bg-cell-medium: #fbfaff !important;
+                --gdg-bg-header: #f4f0ff !important;
+                --gdg-bg-header-has-focus: #e8e1ff !important;
+                --gdg-text-dark: #2c2c54 !important;
+                --gdg-text-medium: #62627d !important;
+                --gdg-border-color: #deddf0 !important;
+                --gdg-accent-color: #7b5cff !important;
             }
             div[data-baseweb="select"],
             div[data-baseweb="select"] > div,
