@@ -2674,11 +2674,10 @@ if os.path.exists(SETLIST_FILE):
     home_costume_col = next((c for c in df.columns if "衣装" in c), None)
     if PUBLIC_MODE:
         # 公開版には、編集・歌詞本文・ローカル画像のタブをそもそも作らない。
-        tab0, tab1, tab2, tab3, tab4, tab6, tab8, tab9, tab11, tab12, tab13, tab14, tab16 = st.tabs(
+        tab1, tab2, tab3, tab4, tab8, tab9, tab14, tab16 = st.tabs(
             [
-                "✨ ホーム", "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装",
-                "🔍 検索", "🏟️ 公演", "👥 参加履歴", "📺 番組・配信",
-                "🗓️ カレンダー", "💴 価格推移", "📅 スケジュール予想", "📚 分類ガイド",
+                "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装",
+                "🏟️ 公演", "👥 参加履歴", "📅 スケジュール予想", "📚 分類ガイド",
             ]
         )
     else:
@@ -2690,132 +2689,133 @@ if os.path.exists(SETLIST_FILE):
             ]
         )
 
-    # TAB 0: ホーム
-    with tab0:
-        render_page_header(
-            "✨",
-            "ライブデータ・ホーム",
-            "現在の絞り込み条件で全データを集計しています。設定はサイドバーからいつでも変更できます。",
-        )
-
-        home_event_count = df["公演名"].nunique() if "公演名" in df.columns else 0
-        home_song_count = df["集計用楽曲名"].nunique() if "集計用楽曲名" in df.columns else 0
-        home_performer_count = 0
-        if home_singer_col and home_singer_col in df.columns:
-            home_performer_count = len({
-                performer.strip()
-                for value in df[home_singer_col].dropna()
-                for performer in re.split(r"[;；]", str(value))
-                if performer.strip()
-            })
-        home_costume_count = df[home_costume_col].nunique() if home_costume_col and home_costume_col in df.columns else 0
-        metric_cols = st.columns(4)
-        metric_cols[0].metric("分析対象の公演", f"{home_event_count:,} 件")
-        metric_cols[1].metric("披露楽曲", f"{home_song_count:,} 曲")
-        metric_cols[2].metric("歌唱者", f"{home_performer_count:,} 人")
-        metric_cols[3].metric("衣装", f"{home_costume_count:,} 種")
-
-        latest_event_row = pd.DataFrame()
-        if "日付_dt" in df.columns:
-            latest_event_row = df.dropna(subset=["日付_dt"]).sort_values("日付_dt", ascending=False).head(1)
-
-        overview_col, guide_col = st.columns([1.25, 1])
-        with overview_col:
-            st.subheader("📅 最新の記録")
-            if not latest_event_row.empty:
-                latest = latest_event_row.iloc[0]
-                st.markdown(
-                    f"**{latest.get('公演名', '公演名未登録')}**  \n\n"
-                    f"{latest['日付_dt'].strftime('%Y/%m/%d')}"
-                )
-                latest_setlist = df[df["公演名"] == latest.get("公演名")]
-                st.caption(f"セットリスト掲載曲: {len(latest_setlist):,} 曲")
-                preview_columns = [c for c in ["曲順", "楽曲名", home_singer_col, home_costume_col] if c and c in latest_setlist.columns]
-                preview_df = latest_setlist[preview_columns].head(8).reset_index(drop=True).copy()
-                if home_singer_col and home_singer_col in preview_df.columns:
-                    preview_df[home_singer_col] = (
-                        preview_df[home_singer_col]
-                        .fillna("")
-                        .astype(str)
-                        .str.replace(";", "・", regex=False)
-                        .str.replace("；", "・", regex=False)
-                    )
-                st.dataframe(
-                    preview_df,
-                    use_container_width=True,
-                    height=285,
-                    hide_index=True,
-                )
-            else:
-                st.info("日付を含む公演データを登録すると、ここに最新公演を表示します。")
-        with guide_col:
-            st.subheader("🧭 まずはここから")
-            st.markdown(
-                """
-                - **ランキング＆比率分析**：全体の傾向や、選んだ公演のアルバム比率を見る
-                - **楽曲詳細分析**：曲の披露履歴、収録アルバム、ジャケットを確認する
-                - **歌唱者×楽曲・衣装分析**：キャスト／アイドルごとの歌唱・衣装履歴を見る
-                - **公演セットリスト分析**：公演ごとの曲順と前回披露からの間隔を見る
-                - **楽曲・公演検索**：気になる曲や公演を探す
-                """
+    if not PUBLIC_MODE:
+        # TAB 0: ホーム
+        with tab0:
+            render_page_header(
+                "✨",
+                "ライブデータ・ホーム",
+                "現在の絞り込み条件で全データを集計しています。設定はサイドバーからいつでも変更できます。",
             )
-            if not lyrics_df.empty:
-                st.info(f"歌詞データ {len(lyrics_df):,} 曲を読み込み済みです。")
 
-        if not youtube_unit_pv_df.empty:
-            st.markdown("---")
-            st.subheader("🎬 ユニット・企画PV")
-            home_pv_col1, home_pv_col2 = st.columns([1, 1.45])
-            with home_pv_col1:
-                selected_pv_target = st.selectbox(
-                    "PVを選ぶ対象:",
-                    unique_in_registered_order(youtube_unit_pv_df["対象"].tolist()),
-                    key="home_unit_pv_target",
-                )
-                selected_pv_rows = youtube_unit_pv_df[
-                    youtube_unit_pv_df["対象"] == selected_pv_target
-                ]
-                pv_choices = {
-                    f"{row['区分']} PV": row["YouTube_URL"]
-                    for row in selected_pv_rows.to_dict("records")
-                }
-                selected_pv_label = st.radio(
-                    "バージョン:",
-                    list(pv_choices),
-                    horizontal=True,
-                    key="home_unit_pv_version",
-                )
-            with home_pv_col2:
-                render_compact_youtube(pv_choices[selected_pv_label], selected_pv_label)
+            home_event_count = df["公演名"].nunique() if "公演名" in df.columns else 0
+            home_song_count = df["集計用楽曲名"].nunique() if "集計用楽曲名" in df.columns else 0
+            home_performer_count = 0
+            if home_singer_col and home_singer_col in df.columns:
+                home_performer_count = len({
+                    performer.strip()
+                    for value in df[home_singer_col].dropna()
+                    for performer in re.split(r"[;；]", str(value))
+                    if performer.strip()
+                })
+            home_costume_count = df[home_costume_col].nunique() if home_costume_col and home_costume_col in df.columns else 0
+            metric_cols = st.columns(4)
+            metric_cols[0].metric("分析対象の公演", f"{home_event_count:,} 件")
+            metric_cols[1].metric("披露楽曲", f"{home_song_count:,} 曲")
+            metric_cols[2].metric("歌唱者", f"{home_performer_count:,} 人")
+            metric_cols[3].metric("衣装", f"{home_costume_count:,} 種")
 
-        if not youtube_anniversary_pv_df.empty:
-            st.markdown("---")
-            st.subheader("🎉 周年PV・記念動画")
-            anniversary_col1, anniversary_col2 = st.columns([1, 1.45])
-            with anniversary_col1:
-                selected_anniversary = st.selectbox(
-                    "周年を選択:",
-                    unique_in_registered_order(youtube_anniversary_pv_df["周年"].tolist()),
-                    key="home_anniversary_pv",
+            latest_event_row = pd.DataFrame()
+            if "日付_dt" in df.columns:
+                latest_event_row = df.dropna(subset=["日付_dt"]).sort_values("日付_dt", ascending=False).head(1)
+
+            overview_col, guide_col = st.columns([1.25, 1])
+            with overview_col:
+                st.subheader("📅 最新の記録")
+                if not latest_event_row.empty:
+                    latest = latest_event_row.iloc[0]
+                    st.markdown(
+                        f"**{latest.get('公演名', '公演名未登録')}**  \n\n"
+                        f"{latest['日付_dt'].strftime('%Y/%m/%d')}"
+                    )
+                    latest_setlist = df[df["公演名"] == latest.get("公演名")]
+                    st.caption(f"セットリスト掲載曲: {len(latest_setlist):,} 曲")
+                    preview_columns = [c for c in ["曲順", "楽曲名", home_singer_col, home_costume_col] if c and c in latest_setlist.columns]
+                    preview_df = latest_setlist[preview_columns].head(8).reset_index(drop=True).copy()
+                    if home_singer_col and home_singer_col in preview_df.columns:
+                        preview_df[home_singer_col] = (
+                            preview_df[home_singer_col]
+                            .fillna("")
+                            .astype(str)
+                            .str.replace(";", "・", regex=False)
+                            .str.replace("；", "・", regex=False)
+                        )
+                    st.dataframe(
+                        preview_df,
+                        use_container_width=True,
+                        height=285,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("日付を含む公演データを登録すると、ここに最新公演を表示します。")
+            with guide_col:
+                st.subheader("🧭 まずはここから")
+                st.markdown(
+                    """
+                    - **ランキング＆比率分析**：全体の傾向や、選んだ公演のアルバム比率を見る
+                    - **楽曲詳細分析**：曲の披露履歴、収録アルバム、ジャケットを確認する
+                    - **歌唱者×楽曲・衣装分析**：キャスト／アイドルごとの歌唱・衣装履歴を見る
+                    - **公演セットリスト分析**：公演ごとの曲順と前回披露からの間隔を見る
+                    - **楽曲・公演検索**：気になる曲や公演を探す
+                    """
                 )
-                anniversary_rows = youtube_anniversary_pv_df[
-                    youtube_anniversary_pv_df["周年"] == selected_anniversary
-                ]
-                anniversary_choices = {
-                    str(row["種別"]): row["YouTube_URL"]
-                    for row in anniversary_rows.to_dict("records")
-                }
-                selected_anniversary_video = st.radio(
-                    "動画:",
-                    list(anniversary_choices),
-                    horizontal=True,
-                    key="home_anniversary_pv_video",
-                )
-            with anniversary_col2:
-                render_compact_youtube(
-                    anniversary_choices[selected_anniversary_video],
-                    f"{selected_anniversary}｜{selected_anniversary_video}",
-                )
+                if not lyrics_df.empty:
+                    st.info(f"歌詞データ {len(lyrics_df):,} 曲を読み込み済みです。")
+
+            if not youtube_unit_pv_df.empty:
+                st.markdown("---")
+                st.subheader("🎬 ユニット・企画PV")
+                home_pv_col1, home_pv_col2 = st.columns([1, 1.45])
+                with home_pv_col1:
+                    selected_pv_target = st.selectbox(
+                        "PVを選ぶ対象:",
+                        unique_in_registered_order(youtube_unit_pv_df["対象"].tolist()),
+                        key="home_unit_pv_target",
+                    )
+                    selected_pv_rows = youtube_unit_pv_df[
+                        youtube_unit_pv_df["対象"] == selected_pv_target
+                    ]
+                    pv_choices = {
+                        f"{row['区分']} PV": row["YouTube_URL"]
+                        for row in selected_pv_rows.to_dict("records")
+                    }
+                    selected_pv_label = st.radio(
+                        "バージョン:",
+                        list(pv_choices),
+                        horizontal=True,
+                        key="home_unit_pv_version",
+                    )
+                with home_pv_col2:
+                    render_compact_youtube(pv_choices[selected_pv_label], selected_pv_label)
+
+            if not youtube_anniversary_pv_df.empty:
+                st.markdown("---")
+                st.subheader("🎉 周年PV・記念動画")
+                anniversary_col1, anniversary_col2 = st.columns([1, 1.45])
+                with anniversary_col1:
+                    selected_anniversary = st.selectbox(
+                        "周年を選択:",
+                        unique_in_registered_order(youtube_anniversary_pv_df["周年"].tolist()),
+                        key="home_anniversary_pv",
+                    )
+                    anniversary_rows = youtube_anniversary_pv_df[
+                        youtube_anniversary_pv_df["周年"] == selected_anniversary
+                    ]
+                    anniversary_choices = {
+                        str(row["種別"]): row["YouTube_URL"]
+                        for row in anniversary_rows.to_dict("records")
+                    }
+                    selected_anniversary_video = st.radio(
+                        "動画:",
+                        list(anniversary_choices),
+                        horizontal=True,
+                        key="home_anniversary_pv_video",
+                    )
+                with anniversary_col2:
+                    render_compact_youtube(
+                        anniversary_choices[selected_anniversary_video],
+                        f"{selected_anniversary}｜{selected_anniversary_video}",
+                    )
 
     # TAB 1: ランキング＆公演別アルバムシリーズ比率分析
     with tab1:
@@ -3827,85 +3827,86 @@ if os.path.exists(SETLIST_FILE):
                 st.markdown(f"**🎤 歌唱キャスト/アイドル:** {g_row.get('歌唱者', '-')}")
                 render_gacha_context_images()
 
-    # TAB 6: データ検索・全データ
-    with tab6:
-        render_page_header(
-            "🔍",
-            "楽曲・公演検索" if PUBLIC_MODE else "データ検索・全データ",
-            "楽曲名・公演名・歌唱者・衣装から記録を探せます。" if PUBLIC_MODE else "登録内容を横断検索し、分類漏れや元データもまとめて確認できます。",
-        )
-        searchable_columns = [
-            column
-            for column in df.columns
-            if not column.startswith("_")
-            and column not in {
-                "search_key", "live_search_key", "日付_dt",
-                "アルバム登録済", "集計用楽曲名", "原曲名", "バージョン",
-            }
-        ]
-        search_input_col, search_target_col = st.columns([2.2, 1])
-        with search_input_col:
-            data_search_keyword = st.text_input(
-                "キーワード",
-                placeholder="楽曲名、公演名、歌唱者、衣装など",
-                key="tab6_data_search",
+    if not PUBLIC_MODE:
+        # TAB 6: データ検索・全データ
+        with tab6:
+            render_page_header(
+                "🔍",
+                "楽曲・公演検索" if PUBLIC_MODE else "データ検索・全データ",
+                "楽曲名・公演名・歌唱者・衣装から記録を探せます。" if PUBLIC_MODE else "登録内容を横断検索し、分類漏れや元データもまとめて確認できます。",
             )
-        with search_target_col:
-            data_search_target = st.selectbox(
-                "検索対象",
-                ["すべての列"] + searchable_columns,
-                key="tab6_data_search_target",
-            )
+            searchable_columns = [
+                column
+                for column in df.columns
+                if not column.startswith("_")
+                and column not in {
+                    "search_key", "live_search_key", "日付_dt",
+                    "アルバム登録済", "集計用楽曲名", "原曲名", "バージョン",
+                }
+            ]
+            search_input_col, search_target_col = st.columns([2.2, 1])
+            with search_input_col:
+                data_search_keyword = st.text_input(
+                    "キーワード",
+                    placeholder="楽曲名、公演名、歌唱者、衣装など",
+                    key="tab6_data_search",
+                )
+            with search_target_col:
+                data_search_target = st.selectbox(
+                    "検索対象",
+                    ["すべての列"] + searchable_columns,
+                    key="tab6_data_search_target",
+                )
 
-        searched_df = df
-        if data_search_keyword.strip():
-            if data_search_target == "すべての列":
-                search_mask = pd.Series(False, index=df.index)
-                for column in searchable_columns:
-                    search_mask |= df[column].astype(str).str.contains(
+            searched_df = df
+            if data_search_keyword.strip():
+                if data_search_target == "すべての列":
+                    search_mask = pd.Series(False, index=df.index)
+                    for column in searchable_columns:
+                        search_mask |= df[column].astype(str).str.contains(
+                            data_search_keyword.strip(),
+                            case=False,
+                            na=False,
+                            regex=False,
+                        )
+                else:
+                    search_mask = df[data_search_target].astype(str).str.contains(
                         data_search_keyword.strip(),
                         case=False,
                         na=False,
                         regex=False,
                     )
-            else:
-                search_mask = df[data_search_target].astype(str).str.contains(
-                    data_search_keyword.strip(),
-                    case=False,
-                    na=False,
-                    regex=False,
-                )
-            searched_df = df[search_mask]
+                searched_df = df[search_mask]
 
-        if not PUBLIC_MODE and "楽曲区分" in df.columns:
-            unclassified_df = df[df["楽曲区分"] == "未分類"]
-            if len(unclassified_df) > 0:
-                with st.expander(
-                    f"⚠️ 未分類データ {len(unclassified_df):,}件を確認",
-                    expanded=False,
-                ):
-                    st.dataframe(
-                        unclassified_df["楽曲名"].value_counts().reset_index(),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
-            else:
-                st.success("✅ すべての曲が正常に分類（紐付け）されています！")
+            if not PUBLIC_MODE and "楽曲区分" in df.columns:
+                unclassified_df = df[df["楽曲区分"] == "未分類"]
+                if len(unclassified_df) > 0:
+                    with st.expander(
+                        f"⚠️ 未分類データ {len(unclassified_df):,}件を確認",
+                        expanded=False,
+                    ):
+                        st.dataframe(
+                            unclassified_df["楽曲名"].value_counts().reset_index(),
+                            use_container_width=True,
+                            hide_index=True,
+                        )
+                else:
+                    st.success("✅ すべての曲が正常に分類（紐付け）されています！")
 
-        st.subheader(f"📊 検索結果：{len(searched_df):,} 件")
-        st.dataframe(
-            searched_df.drop(
-                columns=["search_key", "live_search_key", "日付_dt", "アルバム登録済", "集計用楽曲名", "原曲名", "バージョン"],
-                errors="ignore",
-            ),
-            use_container_width=True,
-            hide_index=True,
-            height=620,
-            column_config={
-                "公演名": st.column_config.TextColumn("公演名", width="large"),
-                "楽曲名": st.column_config.TextColumn("楽曲名", width="large"),
-            }
-        )
+            st.subheader(f"📊 検索結果：{len(searched_df):,} 件")
+            st.dataframe(
+                searched_df.drop(
+                    columns=["search_key", "live_search_key", "日付_dt", "アルバム登録済", "集計用楽曲名", "原曲名", "バージョン"],
+                    errors="ignore",
+                ),
+                use_container_width=True,
+                hide_index=True,
+                height=620,
+                column_config={
+                    "公演名": st.column_config.TextColumn("公演名", width="large"),
+                    "楽曲名": st.column_config.TextColumn("楽曲名", width="large"),
+                }
+            )
 
     if not PUBLIC_MODE:
         # TAB 7: 新規データ＆各種マスタ登録フォーム（全項目網羅版）
@@ -5517,343 +5518,345 @@ if os.path.exists(SETLIST_FILE):
                             },
                         )
 
-    # TAB 11: 公式番組・生配信履歴
-    with tab11:
-        render_page_header(
-            "📺",
-            "番組・配信履歴",
-            "公式番組、配信、シャニラジの出演履歴をまとめて確認できます。",
-        )
-        if not radio_appearance_df.empty:
-            st.subheader("📻 シャニラジ出演履歴")
-            radio_count_df = (
-                radio_appearance_df["キャスト"].value_counts().rename_axis("キャスト")
-                .reset_index(name="出演回数")
+    if not PUBLIC_MODE:
+        # TAB 11: 公式番組・生配信履歴
+        with tab11:
+            render_page_header(
+                "📺",
+                "番組・配信履歴",
+                "公式番組、配信、シャニラジの出演履歴をまとめて確認できます。",
             )
-            radio_col1, radio_col2 = st.columns([1, 1.4])
-            with radio_col1:
-                st.dataframe(radio_count_df, use_container_width=True, height=280, hide_index=True)
-            with radio_col2:
-                selected_radio_cast = st.selectbox(
-                    "出演回を確認するキャスト:",
-                    radio_count_df["キャスト"].tolist(),
-                    key="selected_radio_cast",
+            if not radio_appearance_df.empty:
+                st.subheader("📻 シャニラジ出演履歴")
+                radio_count_df = (
+                    radio_appearance_df["キャスト"].value_counts().rename_axis("キャスト")
+                    .reset_index(name="出演回数")
                 )
-                selected_radio_episodes = radio_appearance_df[
-                    radio_appearance_df["キャスト"] == selected_radio_cast
-                ]["出演回"].tolist()
-                st.metric("出演回数", f"{len(selected_radio_episodes)} 回")
-                if not radio_episode_df.empty:
-                    selected_radio_detail_df = pd.DataFrame({"出演回": selected_radio_episodes}).merge(
-                        radio_episode_df, on="出演回", how="left"
-                    ).sort_values("初回放送_dt", ascending=False)
-                    if not radio_clip_df.empty:
-                        selected_radio_detail_df = selected_radio_detail_df.merge(
-                            radio_clip_df.rename(columns={"YouTube_URL": "切り抜き動画"}),
-                            on="出演回",
-                            how="left",
+                radio_col1, radio_col2 = st.columns([1, 1.4])
+                with radio_col1:
+                    st.dataframe(radio_count_df, use_container_width=True, height=280, hide_index=True)
+                with radio_col2:
+                    selected_radio_cast = st.selectbox(
+                        "出演回を確認するキャスト:",
+                        radio_count_df["キャスト"].tolist(),
+                        key="selected_radio_cast",
+                    )
+                    selected_radio_episodes = radio_appearance_df[
+                        radio_appearance_df["キャスト"] == selected_radio_cast
+                    ]["出演回"].tolist()
+                    st.metric("出演回数", f"{len(selected_radio_episodes)} 回")
+                    if not radio_episode_df.empty:
+                        selected_radio_detail_df = pd.DataFrame({"出演回": selected_radio_episodes}).merge(
+                            radio_episode_df, on="出演回", how="left"
+                        ).sort_values("初回放送_dt", ascending=False)
+                        if not radio_clip_df.empty:
+                            selected_radio_detail_df = selected_radio_detail_df.merge(
+                                radio_clip_df.rename(columns={"YouTube_URL": "切り抜き動画"}),
+                                on="出演回",
+                                how="left",
+                            )
+                        radio_detail_columns = [
+                            column for column in ["出演回", "初回放送", "放送内容", "切り抜き動画"]
+                            if column in selected_radio_detail_df.columns
+                        ]
+                        st.dataframe(
+                            selected_radio_detail_df[radio_detail_columns],
+                            use_container_width=True,
+                            height=280,
+                            hide_index=True,
+                            column_config={
+                                "切り抜き動画": st.column_config.LinkColumn(
+                                    "切り抜き動画",
+                                    display_text="YouTubeで見る",
+                                )
+                            },
                         )
-                    radio_detail_columns = [
-                        column for column in ["出演回", "初回放送", "放送内容", "切り抜き動画"]
-                        if column in selected_radio_detail_df.columns
+                    else:
+                        st.write("・" + "\n・".join([f"第 {episode} 回" for episode in selected_radio_episodes]))
+                if radio_episode_df.empty:
+                    st.caption("※ 放送日・各回タイトルのデータを追加すると詳細表示になります。")
+                st.markdown("---")
+            if broadcast_df.empty:
+                st.info("`broadcasts.csv` を main.py と同じフォルダへ置くと表示されます。")
+            else:
+                display_broadcast_df = broadcast_df.copy()
+                if "初回放送_dt" in display_broadcast_df.columns:
+                    display_broadcast_df = display_broadcast_df.sort_values("初回放送_dt", ascending=False)
+
+                known_broadcast_casts = [
+                    cast_name for cast_name in cast_list
+                    if "出演者" in display_broadcast_df.columns
+                    and display_broadcast_df["出演者"].astype(str).str.contains(re.escape(cast_name), na=False).any()
+                ]
+                filter_col, metric_col = st.columns([2, 1])
+                with filter_col:
+                    selected_broadcast_cast = st.selectbox(
+                        "キャストで絞り込み:",
+                        ["すべて"] + known_broadcast_casts,
+                        key="broadcast_cast_filter",
+                    )
+                if selected_broadcast_cast != "すべて":
+                    display_broadcast_df = display_broadcast_df[
+                        display_broadcast_df["出演者"].astype(str).str.contains(
+                            re.escape(selected_broadcast_cast), na=False
+                        )
+                    ]
+                with metric_col:
+                    st.metric("該当番組数", f"{len(display_broadcast_df):,} 件")
+
+                if not display_broadcast_df.empty:
+                    shown_columns = [
+                        column for column in ["放送内容", "出演者", "初回放送", "告知サイト", "まとめ"]
+                        if column in display_broadcast_df.columns
                     ]
                     st.dataframe(
-                        selected_radio_detail_df[radio_detail_columns],
+                        display_broadcast_df[shown_columns].reset_index(drop=True),
                         use_container_width=True,
-                        height=280,
-                        hide_index=True,
+                        height=520,
                         column_config={
-                            "切り抜き動画": st.column_config.LinkColumn(
-                                "切り抜き動画",
-                                display_text="YouTubeで見る",
-                            )
+                            "放送内容": st.column_config.TextColumn("放送内容", width="large"),
+                            "出演者": st.column_config.TextColumn("出演者", width="large"),
                         },
                     )
-                else:
-                    st.write("・" + "\n・".join([f"第 {episode} 回" for episode in selected_radio_episodes]))
-            if radio_episode_df.empty:
-                st.caption("※ 放送日・各回タイトルのデータを追加すると詳細表示になります。")
-            st.markdown("---")
-        if broadcast_df.empty:
-            st.info("`broadcasts.csv` を main.py と同じフォルダへ置くと表示されます。")
-        else:
-            display_broadcast_df = broadcast_df.copy()
-            if "初回放送_dt" in display_broadcast_df.columns:
-                display_broadcast_df = display_broadcast_df.sort_values("初回放送_dt", ascending=False)
 
-            known_broadcast_casts = [
-                cast_name for cast_name in cast_list
-                if "出演者" in display_broadcast_df.columns
-                and display_broadcast_df["出演者"].astype(str).str.contains(re.escape(cast_name), na=False).any()
-            ]
-            filter_col, metric_col = st.columns([2, 1])
-            with filter_col:
-                selected_broadcast_cast = st.selectbox(
-                    "キャストで絞り込み:",
-                    ["すべて"] + known_broadcast_casts,
-                    key="broadcast_cast_filter",
-                )
-            if selected_broadcast_cast != "すべて":
-                display_broadcast_df = display_broadcast_df[
-                    display_broadcast_df["出演者"].astype(str).str.contains(
-                        re.escape(selected_broadcast_cast), na=False
+                    selected_broadcast_title = st.selectbox(
+                        "告知・まとめページを開く番組:",
+                        display_broadcast_df["放送内容"].tolist(),
+                        key="selected_broadcast_title",
                     )
-                ]
-            with metric_col:
-                st.metric("該当番組数", f"{len(display_broadcast_df):,} 件")
+                    selected_broadcast_row = display_broadcast_df[
+                        display_broadcast_df["放送内容"] == selected_broadcast_title
+                    ].iloc[0]
+                    link_col1, link_col2 = st.columns(2)
+                    if str(selected_broadcast_row.get("告知サイト", "")).startswith("http"):
+                        link_col1.link_button("📢 告知サイトを開く", selected_broadcast_row["告知サイト"])
+                    if str(selected_broadcast_row.get("まとめ", "")).startswith("http"):
+                        link_col2.link_button("📝 まとめページを開く", selected_broadcast_row["まとめ"])
 
-            if not display_broadcast_df.empty:
-                shown_columns = [
-                    column for column in ["放送内容", "出演者", "初回放送", "告知サイト", "まとめ"]
-                    if column in display_broadcast_df.columns
-                ]
-                st.dataframe(
-                    display_broadcast_df[shown_columns].reset_index(drop=True),
-                    use_container_width=True,
-                    height=520,
-                    column_config={
-                        "放送内容": st.column_config.TextColumn("放送内容", width="large"),
-                        "出演者": st.column_config.TextColumn("出演者", width="large"),
-                    },
-                )
-
-                selected_broadcast_title = st.selectbox(
-                    "告知・まとめページを開く番組:",
-                    display_broadcast_df["放送内容"].tolist(),
-                    key="selected_broadcast_title",
-                )
-                selected_broadcast_row = display_broadcast_df[
-                    display_broadcast_df["放送内容"] == selected_broadcast_title
-                ].iloc[0]
-                link_col1, link_col2 = st.columns(2)
-                if str(selected_broadcast_row.get("告知サイト", "")).startswith("http"):
-                    link_col1.link_button("📢 告知サイトを開く", selected_broadcast_row["告知サイト"])
-                if str(selected_broadcast_row.get("まとめ", "")).startswith("http"):
-                    link_col2.link_button("📝 まとめページを開く", selected_broadcast_row["まとめ"])
-
-    # TAB 12: 統合カレンダー
-    with tab12:
-        render_page_header(
-            "🗓️",
-            "シャイニーカレンダー",
-            "公演・番組・ラジオ・リリース・カード・シナリオ実装日を月ごとに確認できます。",
-        )
-        st.caption("🎤 公演　📺 公式番組　📻 シャニラジ　💿 楽曲・アルバム発売日　🃏 カード実装　🎬 シナリオ")
-        calendar_rows = []
-        if 'event_df' in locals() and not event_df.empty:
-            event_date_col = next((c for c in event_df.columns if "日付" in c), None)
-            event_title_col = next((c for c in event_df.columns if "公演" in c), None)
-            if event_date_col and event_title_col:
-                for row in event_df.drop_duplicates(
-                    [event_date_col, event_title_col]
+    if not PUBLIC_MODE:
+        # TAB 12: 統合カレンダー
+        with tab12:
+            render_page_header(
+                "🗓️",
+                "シャイニーカレンダー",
+                "公演・番組・ラジオ・リリース・カード・シナリオ実装日を月ごとに確認できます。",
+            )
+            st.caption("🎤 公演　📺 公式番組　📻 シャニラジ　💿 楽曲・アルバム発売日　🃏 カード実装　🎬 シナリオ")
+            calendar_rows = []
+            if 'event_df' in locals() and not event_df.empty:
+                event_date_col = next((c for c in event_df.columns if "日付" in c), None)
+                event_title_col = next((c for c in event_df.columns if "公演" in c), None)
+                if event_date_col and event_title_col:
+                    for row in event_df.drop_duplicates(
+                        [event_date_col, event_title_col]
+                    ).to_dict("records"):
+                        calendar_rows.append({"日付": row[event_date_col], "種類": "🎤 公演", "内容": row[event_title_col]})
+            if not broadcast_df.empty:
+                for row in broadcast_df.to_dict("records"):
+                    calendar_rows.append({"日付": row.get("初回放送_dt"), "種類": "📺 公式番組", "内容": row.get("放送内容", "")})
+            if not radio_episode_df.empty:
+                for row in radio_episode_df.to_dict("records"):
+                    calendar_rows.append({"日付": row.get("初回放送_dt"), "種類": "📻 シャニラジ", "内容": f"第{row.get('出演回', '')}回　{row.get('放送内容', '')}"})
+            if not song_album_df.empty and "リリース日" in song_album_df.columns:
+                for row in song_album_df.drop_duplicates(
+                    ["リリース日", "アルバム"]
                 ).to_dict("records"):
-                    calendar_rows.append({"日付": row[event_date_col], "種類": "🎤 公演", "内容": row[event_title_col]})
-        if not broadcast_df.empty:
-            for row in broadcast_df.to_dict("records"):
-                calendar_rows.append({"日付": row.get("初回放送_dt"), "種類": "📺 公式番組", "内容": row.get("放送内容", "")})
-        if not radio_episode_df.empty:
-            for row in radio_episode_df.to_dict("records"):
-                calendar_rows.append({"日付": row.get("初回放送_dt"), "種類": "📻 シャニラジ", "内容": f"第{row.get('出演回', '')}回　{row.get('放送内容', '')}"})
-        if not song_album_df.empty and "リリース日" in song_album_df.columns:
-            for row in song_album_df.drop_duplicates(
-                ["リリース日", "アルバム"]
-            ).to_dict("records"):
-                calendar_rows.append({"日付": row.get("リリース日"), "種類": "💿 リリース", "内容": row.get("アルバム", "")})
-        if not card_df.empty and {"実装日_dt", "カード名"}.issubset(card_df.columns):
-            valid_card_df = card_df.dropna(subset=["実装日_dt"]).copy()
-            def has_card_calendar_value(value):
-                return clean_text(str(value)).lower() not in {"", "nan", "none"}
+                    calendar_rows.append({"日付": row.get("リリース日"), "種類": "💿 リリース", "内容": row.get("アルバム", "")})
+            if not card_df.empty and {"実装日_dt", "カード名"}.issubset(card_df.columns):
+                valid_card_df = card_df.dropna(subset=["実装日_dt"]).copy()
+                def has_card_calendar_value(value):
+                    return clean_text(str(value)).lower() not in {"", "nan", "none"}
 
-            def is_card_ps_value(value):
-                normalized = clean_text(str(value)).upper()
-                return normalized in {"P", "S", "ライブ専用P"}
+                def is_card_ps_value(value):
+                    normalized = clean_text(str(value)).upper()
+                    return normalized in {"P", "S", "ライブ専用P"}
 
-            card_only_df = valid_card_df[
-                valid_card_df["P/S"].apply(is_card_ps_value)
-                & valid_card_df["カード名"].apply(has_card_calendar_value)
-            ]
-            for implementation_date, card_group in card_only_df.groupby("実装日_dt"):
-                card_count = len(card_group)
-                card_names = []
-                for card_row in card_group.to_dict("records"):
-                    idol_name = clean_text(str(card_row.get("アイドル", "")))
-                    card_name = clean_text(str(card_row.get("カード名", "")))
-                    game_name = clean_text(str(card_row.get("作品", "")))
-                    card_names.append(f"{game_name + '｜' if game_name else ''}{idol_name} {card_name}".strip())
-                calendar_rows.append({
-                    "日付": implementation_date,
-                    "種類": "🃏 カード実装",
-                    "内容": f"カード実装 {card_count}枚：{' ／ '.join(card_names)}",
-                })
-            # P/S列がP・S以外の行は、カードではなくシナリオ・イベントの実装日。
-            scenario_df = valid_card_df[
-                valid_card_df["P/S"].apply(has_card_calendar_value)
-                & ~valid_card_df["P/S"].apply(is_card_ps_value)
-            ].copy()
-            for implementation_date, scenario_group in scenario_df.groupby("実装日_dt"):
-                scenario_names = unique_in_registered_order([
-                    clean_text(str(value))
-                    for value in scenario_group["P/S"].tolist()
-                    if has_card_calendar_value(value)
-                ])
-                calendar_rows.append({
-                    "日付": implementation_date,
-                    "種類": "🎬 シナリオ・イベント",
-                    "内容": f"シナリオ・イベント実装：{' ／ '.join(scenario_names)}",
-                })
-        calendar_df = pd.DataFrame(calendar_rows)
-        if calendar_df.empty:
-            st.info("カレンダーに表示できる日付データがありません。")
-        else:
-            calendar_df["日付"] = pd.to_datetime(calendar_df["日付"], errors="coerce")
-            calendar_df = calendar_df.dropna(subset=["日付"])
-            years = sorted(calendar_df["日付"].dt.year.unique(), reverse=True)
-            if st.session_state.get("calendar_year") not in years:
-                st.session_state["calendar_year"] = years[0]
-            if st.session_state.get("calendar_month") not in range(1, 13):
-                st.session_state["calendar_month"] = datetime.now().month
+                card_only_df = valid_card_df[
+                    valid_card_df["P/S"].apply(is_card_ps_value)
+                    & valid_card_df["カード名"].apply(has_card_calendar_value)
+                ]
+                for implementation_date, card_group in card_only_df.groupby("実装日_dt"):
+                    card_count = len(card_group)
+                    card_names = []
+                    for card_row in card_group.to_dict("records"):
+                        idol_name = clean_text(str(card_row.get("アイドル", "")))
+                        card_name = clean_text(str(card_row.get("カード名", "")))
+                        game_name = clean_text(str(card_row.get("作品", "")))
+                        card_names.append(f"{game_name + '｜' if game_name else ''}{idol_name} {card_name}".strip())
+                    calendar_rows.append({
+                        "日付": implementation_date,
+                        "種類": "🃏 カード実装",
+                        "内容": f"カード実装 {card_count}枚：{' ／ '.join(card_names)}",
+                    })
+                # P/S列がP・S以外の行は、カードではなくシナリオ・イベントの実装日。
+                scenario_df = valid_card_df[
+                    valid_card_df["P/S"].apply(has_card_calendar_value)
+                    & ~valid_card_df["P/S"].apply(is_card_ps_value)
+                ].copy()
+                for implementation_date, scenario_group in scenario_df.groupby("実装日_dt"):
+                    scenario_names = unique_in_registered_order([
+                        clean_text(str(value))
+                        for value in scenario_group["P/S"].tolist()
+                        if has_card_calendar_value(value)
+                    ])
+                    calendar_rows.append({
+                        "日付": implementation_date,
+                        "種類": "🎬 シナリオ・イベント",
+                        "内容": f"シナリオ・イベント実装：{' ／ '.join(scenario_names)}",
+                    })
+            calendar_df = pd.DataFrame(calendar_rows)
+            if calendar_df.empty:
+                st.info("カレンダーに表示できる日付データがありません。")
+            else:
+                calendar_df["日付"] = pd.to_datetime(calendar_df["日付"], errors="coerce")
+                calendar_df = calendar_df.dropna(subset=["日付"])
+                years = sorted(calendar_df["日付"].dt.year.unique(), reverse=True)
+                if st.session_state.get("calendar_year") not in years:
+                    st.session_state["calendar_year"] = years[0]
+                if st.session_state.get("calendar_month") not in range(1, 13):
+                    st.session_state["calendar_month"] = datetime.now().month
 
-            search_col, jump_col = st.columns([3, 1])
-            with search_col:
-                calendar_search_query = st.text_input(
-                    "予定を検索して該当月へ移動",
-                    placeholder="例：6thLIVE、キズナシェアリング、【カード名】",
-                    key="calendar_jump_search",
-                ).strip()
-            calendar_search_matches = pd.DataFrame()
-            selected_calendar_match = None
-            if calendar_search_query:
-                calendar_search_matches = calendar_df[
-                    calendar_df["内容"].astype(str).str.contains(
-                        calendar_search_query, case=False, na=False, regex=False
-                    )
-                ].sort_values("日付", ascending=False, kind="stable")
-                if calendar_search_matches.empty:
-                    with search_col:
-                        st.caption("一致する予定はありません。")
-                else:
-                    calendar_search_matches = calendar_search_matches.drop_duplicates(
-                        subset=["日付", "種類", "内容"], keep="first"
-                    )
-                    calendar_match_labels = []
-                    calendar_match_lookup = {}
-                    for match_index, match_row in calendar_search_matches.iterrows():
-                        content_label = str(match_row["内容"]).replace("\n", " ").strip()
-                        if len(content_label) > 56:
-                            content_label = f"{content_label[:56]}…"
-                        match_label = (
-                            f"{match_row['日付'].strftime('%Y/%m/%d')} ｜ "
-                            f"{match_row['種類']} ｜ {content_label}"
+                search_col, jump_col = st.columns([3, 1])
+                with search_col:
+                    calendar_search_query = st.text_input(
+                        "予定を検索して該当月へ移動",
+                        placeholder="例：6thLIVE、キズナシェアリング、【カード名】",
+                        key="calendar_jump_search",
+                    ).strip()
+                calendar_search_matches = pd.DataFrame()
+                selected_calendar_match = None
+                if calendar_search_query:
+                    calendar_search_matches = calendar_df[
+                        calendar_df["内容"].astype(str).str.contains(
+                            calendar_search_query, case=False, na=False, regex=False
                         )
-                        calendar_match_labels.append(match_label)
-                        calendar_match_lookup[match_label] = match_index
-                    with search_col:
-                        selected_calendar_match = st.selectbox(
-                            f"見つかった予定（{len(calendar_match_labels)}件）",
-                            calendar_match_labels,
-                            key="calendar_jump_match",
+                    ].sort_values("日付", ascending=False, kind="stable")
+                    if calendar_search_matches.empty:
+                        with search_col:
+                            st.caption("一致する予定はありません。")
+                    else:
+                        calendar_search_matches = calendar_search_matches.drop_duplicates(
+                            subset=["日付", "種類", "内容"], keep="first"
                         )
-            with jump_col:
-                st.caption(" ")
-                if st.button(
-                    "該当月へ移動",
-                    key="calendar_jump_button",
-                    type="primary",
-                    disabled=selected_calendar_match is None,
-                    use_container_width=True,
-                ):
-                    matched_date = calendar_search_matches.loc[
-                        calendar_match_lookup[selected_calendar_match], "日付"
-                    ]
-                    st.session_state["calendar_year"] = int(matched_date.year)
-                    st.session_state["calendar_month"] = int(matched_date.month)
-                    st.rerun()
+                        calendar_match_labels = []
+                        calendar_match_lookup = {}
+                        for match_index, match_row in calendar_search_matches.iterrows():
+                            content_label = str(match_row["内容"]).replace("\n", " ").strip()
+                            if len(content_label) > 56:
+                                content_label = f"{content_label[:56]}…"
+                            match_label = (
+                                f"{match_row['日付'].strftime('%Y/%m/%d')} ｜ "
+                                f"{match_row['種類']} ｜ {content_label}"
+                            )
+                            calendar_match_labels.append(match_label)
+                            calendar_match_lookup[match_label] = match_index
+                        with search_col:
+                            selected_calendar_match = st.selectbox(
+                                f"見つかった予定（{len(calendar_match_labels)}件）",
+                                calendar_match_labels,
+                                key="calendar_jump_match",
+                            )
+                with jump_col:
+                    st.caption(" ")
+                    if st.button(
+                        "該当月へ移動",
+                        key="calendar_jump_button",
+                        type="primary",
+                        disabled=selected_calendar_match is None,
+                        use_container_width=True,
+                    ):
+                        matched_date = calendar_search_matches.loc[
+                            calendar_match_lookup[selected_calendar_match], "日付"
+                        ]
+                        st.session_state["calendar_year"] = int(matched_date.year)
+                        st.session_state["calendar_month"] = int(matched_date.month)
+                        st.rerun()
 
-            nav_left, nav_title, nav_right = st.columns([1, 3, 1])
-            current_year = st.session_state["calendar_year"]
-            current_month = st.session_state["calendar_month"]
-            previous_year, previous_month = (current_year - 1, 12) if current_month == 1 else (current_year, current_month - 1)
-            next_year, next_month = (current_year + 1, 1) if current_month == 12 else (current_year, current_month + 1)
-            with nav_left:
-                if st.button("← 前の月", key="calendar_previous", disabled=previous_year not in years):
-                    st.session_state["calendar_year"] = previous_year
-                    st.session_state["calendar_month"] = previous_month
-                    st.rerun()
-            with nav_title:
-                st.markdown(f"<div style='text-align:center; font-size:1.35rem; font-weight:800; padding:.25rem'>{current_year}年 {current_month}月</div>", unsafe_allow_html=True)
-            with nav_right:
-                if st.button("次の月 →", key="calendar_next", disabled=next_year not in years):
-                    st.session_state["calendar_year"] = next_year
-                    st.session_state["calendar_month"] = next_month
-                    st.rerun()
+                nav_left, nav_title, nav_right = st.columns([1, 3, 1])
+                current_year = st.session_state["calendar_year"]
+                current_month = st.session_state["calendar_month"]
+                previous_year, previous_month = (current_year - 1, 12) if current_month == 1 else (current_year, current_month - 1)
+                next_year, next_month = (current_year + 1, 1) if current_month == 12 else (current_year, current_month + 1)
+                with nav_left:
+                    if st.button("← 前の月", key="calendar_previous", disabled=previous_year not in years):
+                        st.session_state["calendar_year"] = previous_year
+                        st.session_state["calendar_month"] = previous_month
+                        st.rerun()
+                with nav_title:
+                    st.markdown(f"<div style='text-align:center; font-size:1.35rem; font-weight:800; padding:.25rem'>{current_year}年 {current_month}月</div>", unsafe_allow_html=True)
+                with nav_right:
+                    if st.button("次の月 →", key="calendar_next", disabled=next_year not in years):
+                        st.session_state["calendar_year"] = next_year
+                        st.session_state["calendar_month"] = next_month
+                        st.rerun()
 
-            cal_col1, cal_col2, cal_col3 = st.columns([1, 1, 2])
-            with cal_col1:
-                selected_calendar_year = st.selectbox("年", years, key="calendar_year")
-            with cal_col2:
-                selected_calendar_month = st.selectbox("月", list(range(1, 13)), key="calendar_month")
-            with cal_col3:
-                st.caption("表示する種類（ボタンで切り替え）")
-                calendar_type_options = unique_in_registered_order(calendar_df["種類"].tolist())
-                type_button_columns = st.columns(min(3, max(1, len(calendar_type_options))))
-                visible_calendar_types = []
-                for index, calendar_type in enumerate(calendar_type_options):
-                    with type_button_columns[index % len(type_button_columns)]:
-                        if st.checkbox(
-                            calendar_type,
-                            value=True,
-                            key=f"calendar_type_button_{make_search_key(calendar_type)}",
-                        ):
-                            visible_calendar_types.append(calendar_type)
-            month_df = calendar_df[(calendar_df["日付"].dt.year == selected_calendar_year) & (calendar_df["日付"].dt.month == selected_calendar_month) & (calendar_df["種類"].isin(visible_calendar_types))].copy()
-            st.subheader(f"{selected_calendar_year}年 {selected_calendar_month}月")
-            render_calendar_context_images(selected_calendar_year, selected_calendar_month)
-            weekdays = ["日", "月", "火", "水", "木", "金", "土"]
-            badge_colors = {"🎤 公演": "#e879a8", "📺 公式番組": "#58aee8", "📻 シャニラジ": "#8b7be8", "💿 リリース": "#e8a54f", "🃏 カード実装": "#55b99d", "🎬 シナリオ・イベント": "#7287d8"}
-            short_kind_names = {"🎤 公演": "公演", "📺 公式番組": "番組", "📻 シャニラジ": "ラジオ", "💿 リリース": "発売", "🃏 カード実装": "カード", "🎬 シナリオ・イベント": "シナリオ"}
-            calendar_html = textwrap.dedent("""
-                <style>
-                    .shiny-calendar-scroll {width:100%; overflow-x:auto; padding-bottom:4px; scrollbar-color:rgba(102,87,217,.5) transparent;}
-                    .shiny-calendar {display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; margin:5px 0 12px;}
-                    .shiny-calendar-head {font-weight:800; color:#30335f; padding:2px 5px; font-size:.78rem;}
-                    .shiny-calendar-day {min-height:82px; padding:5px; border:1px solid #deddf0; border-radius:8px; background:rgba(255,255,255,.72);}
-                    .shiny-calendar-empty {background:rgba(255,255,255,.18); border-color:transparent;}
-                    .shiny-calendar-date {font-weight:800; color:#343761; margin-bottom:2px; font-size:.82rem;}
-                    .shiny-calendar-item {font-size:.67rem; line-height:1.25; margin:2px 0; padding:2px 4px; background:#fff; border-left:3px solid #8892aa; white-space:normal; overflow-wrap:anywhere;}
-                    .shiny-calendar-kind {font-size:.59rem; font-weight:800; color:#5c5d83; margin-right:2px;}
-                    .shiny-calendar-more {font-size:.66rem; color:#77799e; margin-top:2px;}
-                    @media (max-width: 760px) {
-                        .shiny-calendar {min-width:980px; gap:5px;}
-                        .shiny-calendar-day {min-height:104px; padding:6px; border-radius:7px;}
-                        .shiny-calendar-head {font-size:.82rem; padding:3px; text-align:center;}
-                        .shiny-calendar-item {font-size:.72rem; padding:3px 4px; border-left-width:3px;}
-                    }
-                </style>
-                <div class='shiny-calendar-scroll'><div class='shiny-calendar'>
-            """)
-            for weekday in weekdays:
-                calendar_html += f"<div class='shiny-calendar-head'>{weekday}</div>"
-            sunday_first_calendar = calendar.Calendar(firstweekday=calendar.SUNDAY)
-            for week in sunday_first_calendar.monthdayscalendar(selected_calendar_year, selected_calendar_month):
-                for day in week:
-                    if not day:
-                        calendar_html += "<div class='shiny-calendar-day shiny-calendar-empty'></div>"
-                        continue
-                    day_items = month_df[month_df["日付"].dt.day == day]
-                    calendar_html += f"<div class='shiny-calendar-day'><div class='shiny-calendar-date'>{day}</div>"
-                    for item in day_items.to_dict("records"):
-                        short_title = str(item["内容"]).replace("THE IDOLM@STER SHINY COLORS", "").strip()
-                        item_kind = item["種類"]
-                        calendar_html += (
-                            f"<div class='shiny-calendar-item' style='border-left-color:{badge_colors.get(item_kind, '#8892aa')}'>"
-                            f"<span class='shiny-calendar-kind'>{html.escape(short_kind_names.get(item_kind, item_kind))}</span>"
-                            f"{html.escape(short_title)}</div>"
-                        )
-                    calendar_html += "</div>"
-            calendar_html += "</div></div>"
-            st.markdown(calendar_html, unsafe_allow_html=True)
-            st.subheader("📋 今月の予定一覧")
-            st.dataframe(month_df.sort_values("日付")[["日付", "種類", "内容"]], use_container_width=True, hide_index=True)
+                cal_col1, cal_col2, cal_col3 = st.columns([1, 1, 2])
+                with cal_col1:
+                    selected_calendar_year = st.selectbox("年", years, key="calendar_year")
+                with cal_col2:
+                    selected_calendar_month = st.selectbox("月", list(range(1, 13)), key="calendar_month")
+                with cal_col3:
+                    st.caption("表示する種類（ボタンで切り替え）")
+                    calendar_type_options = unique_in_registered_order(calendar_df["種類"].tolist())
+                    type_button_columns = st.columns(min(3, max(1, len(calendar_type_options))))
+                    visible_calendar_types = []
+                    for index, calendar_type in enumerate(calendar_type_options):
+                        with type_button_columns[index % len(type_button_columns)]:
+                            if st.checkbox(
+                                calendar_type,
+                                value=True,
+                                key=f"calendar_type_button_{make_search_key(calendar_type)}",
+                            ):
+                                visible_calendar_types.append(calendar_type)
+                month_df = calendar_df[(calendar_df["日付"].dt.year == selected_calendar_year) & (calendar_df["日付"].dt.month == selected_calendar_month) & (calendar_df["種類"].isin(visible_calendar_types))].copy()
+                st.subheader(f"{selected_calendar_year}年 {selected_calendar_month}月")
+                render_calendar_context_images(selected_calendar_year, selected_calendar_month)
+                weekdays = ["日", "月", "火", "水", "木", "金", "土"]
+                badge_colors = {"🎤 公演": "#e879a8", "📺 公式番組": "#58aee8", "📻 シャニラジ": "#8b7be8", "💿 リリース": "#e8a54f", "🃏 カード実装": "#55b99d", "🎬 シナリオ・イベント": "#7287d8"}
+                short_kind_names = {"🎤 公演": "公演", "📺 公式番組": "番組", "📻 シャニラジ": "ラジオ", "💿 リリース": "発売", "🃏 カード実装": "カード", "🎬 シナリオ・イベント": "シナリオ"}
+                calendar_html = textwrap.dedent("""
+                    <style>
+                        .shiny-calendar-scroll {width:100%; overflow-x:auto; padding-bottom:4px; scrollbar-color:rgba(102,87,217,.5) transparent;}
+                        .shiny-calendar {display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); gap:4px; margin:5px 0 12px;}
+                        .shiny-calendar-head {font-weight:800; color:#30335f; padding:2px 5px; font-size:.78rem;}
+                        .shiny-calendar-day {min-height:82px; padding:5px; border:1px solid #deddf0; border-radius:8px; background:rgba(255,255,255,.72);}
+                        .shiny-calendar-empty {background:rgba(255,255,255,.18); border-color:transparent;}
+                        .shiny-calendar-date {font-weight:800; color:#343761; margin-bottom:2px; font-size:.82rem;}
+                        .shiny-calendar-item {font-size:.67rem; line-height:1.25; margin:2px 0; padding:2px 4px; background:#fff; border-left:3px solid #8892aa; white-space:normal; overflow-wrap:anywhere;}
+                        .shiny-calendar-kind {font-size:.59rem; font-weight:800; color:#5c5d83; margin-right:2px;}
+                        .shiny-calendar-more {font-size:.66rem; color:#77799e; margin-top:2px;}
+                        @media (max-width: 760px) {
+                            .shiny-calendar {min-width:980px; gap:5px;}
+                            .shiny-calendar-day {min-height:104px; padding:6px; border-radius:7px;}
+                            .shiny-calendar-head {font-size:.82rem; padding:3px; text-align:center;}
+                            .shiny-calendar-item {font-size:.72rem; padding:3px 4px; border-left-width:3px;}
+                        }
+                    </style>
+                    <div class='shiny-calendar-scroll'><div class='shiny-calendar'>
+                """)
+                for weekday in weekdays:
+                    calendar_html += f"<div class='shiny-calendar-head'>{weekday}</div>"
+                sunday_first_calendar = calendar.Calendar(firstweekday=calendar.SUNDAY)
+                for week in sunday_first_calendar.monthdayscalendar(selected_calendar_year, selected_calendar_month):
+                    for day in week:
+                        if not day:
+                            calendar_html += "<div class='shiny-calendar-day shiny-calendar-empty'></div>"
+                            continue
+                        day_items = month_df[month_df["日付"].dt.day == day]
+                        calendar_html += f"<div class='shiny-calendar-day'><div class='shiny-calendar-date'>{day}</div>"
+                        for item in day_items.to_dict("records"):
+                            short_title = str(item["内容"]).replace("THE IDOLM@STER SHINY COLORS", "").strip()
+                            item_kind = item["種類"]
+                            calendar_html += (
+                                f"<div class='shiny-calendar-item' style='border-left-color:{badge_colors.get(item_kind, '#8892aa')}'>"
+                                f"<span class='shiny-calendar-kind'>{html.escape(short_kind_names.get(item_kind, item_kind))}</span>"
+                                f"{html.escape(short_title)}</div>"
+                            )
+                        calendar_html += "</div>"
+                calendar_html += "</div></div>"
+                st.markdown(calendar_html, unsafe_allow_html=True)
+                st.subheader("📋 今月の予定一覧")
+                st.dataframe(month_df.sort_values("日付")[["日付", "種類", "内容"]], use_container_width=True, hide_index=True)
 
     # TAB 13: 価格推移
     with tab14:
@@ -5922,443 +5925,444 @@ if os.path.exists(SETLIST_FILE):
                 hide_index=True,
             )
 
-    with tab13:
-        render_page_header(
-            "💴",
-            "価格推移・購入ガイド",
-            "CD・ソロコレクション・Blu-ray・チケット・配信の定価を、カテゴリ別に比較できます。",
-        )
-        if price_history_df.empty:
-            st.info("価格データを読み込めませんでした。price_history.csv を配置してください。")
-        else:
-            display_price_df = price_history_df.copy().fillna("")
-            display_price_df["価格"] = pd.to_numeric(
-                display_price_df["価格"].astype(str).str.replace(",", "", regex=False),
-                errors="coerce",
+    if not PUBLIC_MODE:
+        with tab13:
+            render_page_header(
+                "💴",
+                "価格推移・購入ガイド",
+                "CD・ソロコレクション・Blu-ray・チケット・配信の定価を、カテゴリ別に比較できます。",
             )
-            display_price_df = display_price_df.dropna(subset=["価格"])
-            display_price_df["日付"] = pd.to_datetime(display_price_df["日付"], errors="coerce")
-            display_price_df["日付種別"] = "登録日"
-
-            # 日付未入力の価格は、CDなら収録アルバムの発売日、公演関連なら初日を補助日付にする。
-            album_date_candidates = []
-            if not song_album_df.empty:
-                price_album_col = next((c for c in song_album_df.columns if "アルバム" in c or "CD" in c), None)
-                price_release_col = next((c for c in song_album_df.columns if "リリース" in c or "発売日" in c), None)
-                if price_album_col and price_release_col:
-                    for price_album_row in song_album_df[[price_album_col, price_release_col]].dropna().drop_duplicates().to_dict("records"):
-                        parsed_date = pd.to_datetime(price_album_row[price_release_col], errors="coerce")
-                        if pd.notna(parsed_date):
-                            album_date_candidates.append((
-                                make_search_key(price_album_row[price_album_col]), parsed_date
-                            ))
-            event_date_candidates = []
-            # events.csv に未収録の公演。中止公演も、当初予定されていた日を明示して価格履歴へ残す。
-            price_event_date_overrides = {
-                "springparty2020": (pd.Timestamp("2020-03-21"), "開催予定日（中止）"),
-            }
-
-            def make_price_event_key(title):
-                """価格表とevents.csvの公演名の記号・引用符・DAY表記差を吸収する。"""
-                normalized = clean_live_name(str(title))
-                normalized = re.sub(r"\s*(?:DAY|day)\s*[0-9０-９]+.*$", "", normalized)
-                normalized = normalized.replace("∞", "infinity")
-                normalized = normalized.lower()
-                return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
-
-            if "event_df" in locals() and not event_df.empty:
-                price_event_name_col = next((c for c in event_df.columns if "公演" in c or "イベント" in c), None)
-                price_event_date_col = next((c for c in event_df.columns if "日付" in c), None)
-                if price_event_name_col and price_event_date_col:
-                    for price_event_row in event_df[[price_event_name_col, price_event_date_col]].dropna().drop_duplicates().to_dict("records"):
-                        parsed_date = pd.to_datetime(price_event_row[price_event_date_col], errors="coerce")
-                        if pd.notna(parsed_date):
-                            event_date_candidates.append((
-                                make_price_event_key(price_event_row[price_event_name_col]), parsed_date
-                            ))
-
-            # 価格表は「01～08」「Song for Prism ①」のように、ディスコグラフィの
-            # 個別商品名とは異なるまとめ表記を使う。その差分をここで吸収する。
-            def make_price_catalog_key(title):
-                """CD名の括弧・引用符・@・ハイフンなどの表記揺れを除いた照合キー。"""
-                normalized = (
-                    clean_song_title_for_search(str(title))
-                    .replace("①", "1周目")
-                    .replace("②", "2周目")
-                    .replace("③", "3周目")
-                    .replace("Synthe-Side", "Synse-Side")
-                    .replace("Synthe Side", "Synse-Side")
-                    .lower()
+            if price_history_df.empty:
+                st.info("価格データを読み込めませんでした。price_history.csv を配置してください。")
+            else:
+                display_price_df = price_history_df.copy().fillna("")
+                display_price_df["価格"] = pd.to_numeric(
+                    display_price_df["価格"].astype(str).str.replace(",", "", regex=False),
+                    errors="coerce",
                 )
-                return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
+                display_price_df = display_price_df.dropna(subset=["価格"])
+                display_price_df["日付"] = pd.to_datetime(display_price_df["日付"], errors="coerce")
+                display_price_df["日付種別"] = "登録日"
 
-            def make_price_match_keys(title):
-                raw_title = str(title)
-                normalized_title = (
-                    raw_title
-                    .replace("①", "1周目")
-                    .replace("②", "2周目")
-                    .replace("③", "3周目")
-                    .replace("全体", "")
-                    .replace("Synthe-Side", "Synse-Side")
-                    .replace("Synthe Side", "Synse-Side")
-                )
-                aliases = [make_price_catalog_key(raw_title), make_price_catalog_key(normalized_title)]
-                manual_aliases = {
-                    "songforprismリフラク": "pjrefractions",
-                    "colorfulfethersシーズ": "colorfulfethersshhis",
-                    "colorfulfethersコメ": "colorfulfetherscometik",
-                    "円環haloaround": "円環haloaround",
-                    "28colorscollection数量限定盤": "28colorscollection",
-                    "28colorscollection通常盤": "28colorscollection",
+                # 日付未入力の価格は、CDなら収録アルバムの発売日、公演関連なら初日を補助日付にする。
+                album_date_candidates = []
+                if not song_album_df.empty:
+                    price_album_col = next((c for c in song_album_df.columns if "アルバム" in c or "CD" in c), None)
+                    price_release_col = next((c for c in song_album_df.columns if "リリース" in c or "発売日" in c), None)
+                    if price_album_col and price_release_col:
+                        for price_album_row in song_album_df[[price_album_col, price_release_col]].dropna().drop_duplicates().to_dict("records"):
+                            parsed_date = pd.to_datetime(price_album_row[price_release_col], errors="coerce")
+                            if pd.notna(parsed_date):
+                                album_date_candidates.append((
+                                    make_search_key(price_album_row[price_album_col]), parsed_date
+                                ))
+                event_date_candidates = []
+                # events.csv に未収録の公演。中止公演も、当初予定されていた日を明示して価格履歴へ残す。
+                price_event_date_overrides = {
+                    "springparty2020": (pd.Timestamp("2020-03-21"), "開催予定日（中止）"),
                 }
-                title_key = make_price_catalog_key(raw_title)
-                if title_key in manual_aliases:
-                    aliases.append(manual_aliases[title_key])
-                return [alias for alias in aliases if alias]
 
-            # songs_albums.csv に収録曲がない会場CD・企画盤は、公式ディスコグラフィの発売日を使う。
-            price_release_date_overrides = {
-                make_price_catalog_key("COLORFUL FE@THERS シーズ"): pd.Timestamp("2023-07-26"),
-                make_price_catalog_key("COLORFUL FE@THERS コメ"): pd.Timestamp("2024-12-04"),
-                make_price_catalog_key("6thLIVE TOUR Come and Unite! part1"): pd.Timestamp("2024-03-02"),
-                make_price_catalog_key("6thLIVE TOUR Come and Unite! part2"): pd.Timestamp("2024-03-02"),
-                make_price_catalog_key("6thLIVE TOUR Come and Unite! part3"): pd.Timestamp("2024-03-02"),
-                make_price_catalog_key("7th UNITLIVE TOUR 円環 -Halo around- part1"): pd.Timestamp("2025-06-21"),
-                make_price_catalog_key("7th UNITLIVE TOUR 円環 -Halo around- part2"): pd.Timestamp("2025-06-21"),
-                make_price_catalog_key("7th UNITLIVE TOUR 円環 -Halo around- part3"): pd.Timestamp("2025-06-21"),
-                make_price_catalog_key("Beyond the Blue sky part1"): pd.Timestamp("2024-07-27"),
-                make_price_catalog_key("Beyond the Blue sky part2"): pd.Timestamp("2024-07-27"),
-                make_price_catalog_key("L@YERED WING part 1"): pd.Timestamp("2022-02-14"),
-                make_price_catalog_key("L@YERED WING part 2"): pd.Timestamp("2022-02-14"),
-                make_price_catalog_key("M@STERS OF IDOL WORLD 2025 part1"): pd.Timestamp("2025-12-13"),
-                make_price_catalog_key("M@STERS OF IDOL WORLD 2025 part2"): pd.Timestamp("2025-12-13"),
-                make_price_catalog_key("SOLO PERFORMANCE LIVE 我儘なまま Stella"): pd.Timestamp("2023-07-22"),
-                make_price_catalog_key("SOLO PERFORMANCE LIVE 我儘なまま Luna"): pd.Timestamp("2023-07-22"),
-                make_price_catalog_key("SOLO PERFORMANCE LIVE 我儘なまま Sol"): pd.Timestamp("2023-07-22"),
-                make_price_catalog_key("28 colors- COLLECTION 【数量限定盤】"): pd.Timestamp("2025-10-01"),
-                make_price_catalog_key("28 colors- COLLECTION 【通常盤】"): pd.Timestamp("2025-10-01"),
-                make_price_catalog_key("HOPEFUL FE@THERS -Stella-"): pd.Timestamp("2026-09-16"),
-                make_price_catalog_key("HOPEFUL FE@THERS -Luna-"): pd.Timestamp("2026-09-16"),
-                make_price_catalog_key("HOPEFUL FE@THERS -Sol-"): pd.Timestamp("2026-09-16"),
-                make_price_catalog_key("OFF VOCAL COLLECTION 01"): pd.Timestamp("2022-01-19"),
-                make_price_catalog_key("OFF VOCAL COLLECTION 02"): pd.Timestamp("2022-12-07"),
-                make_price_catalog_key("WING COLLECTION"): pd.Timestamp("2023-01-18"),
-                make_price_catalog_key("Song for Prism ①"): pd.Timestamp("2023-10-18"),
-                make_price_catalog_key("Song for Prism ①全体"): pd.Timestamp("2023-10-18"),
-                make_price_catalog_key("Song for Prism ②"): pd.Timestamp("2024-11-20"),
-                make_price_catalog_key("Song for Prism ②全体"): pd.Timestamp("2024-11-20"),
-                make_price_catalog_key("Song for Prism ③"): pd.Timestamp("2025-12-24"),
-                make_price_catalog_key("Song for Prism ③全体"): pd.Timestamp("2025-12-24"),
-                make_price_catalog_key("Song for Prism リフラク"): pd.Timestamp("2026-01-07"),
-            }
+                def make_price_event_key(title):
+                    """価格表とevents.csvの公演名の記号・引用符・DAY表記差を吸収する。"""
+                    normalized = clean_live_name(str(title))
+                    normalized = re.sub(r"\s*(?:DAY|day)\s*[0-9０-９]+.*$", "", normalized)
+                    normalized = normalized.replace("∞", "infinity")
+                    normalized = normalized.lower()
+                    return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
 
-            for row_index, price_row in display_price_df[display_price_df["日付"].isna()].iterrows():
-                target_keys = make_price_match_keys(price_row["対象名"])
-                category = str(price_row["カテゴリ"])
-                manual_release_date = price_release_date_overrides.get(
-                    make_price_catalog_key(price_row["対象名"])
-                )
-                album_matched_dates = [
-                    candidate_date for candidate_key, candidate_date in album_date_candidates
-                    if candidate_key and any(
-                        target_key in make_price_catalog_key(candidate_key)
-                        or make_price_catalog_key(candidate_key) in target_key
-                        for target_key in target_keys
-                    )
-                ]
-                event_target_key = make_price_event_key(price_row["対象名"])
-                event_matched_dates = [
-                    candidate_date for candidate_key, candidate_date in event_date_candidates
-                    if candidate_key and event_target_key and (
-                        event_target_key in candidate_key or candidate_key in event_target_key
-                    )
-                ]
-                override_date_info = price_event_date_overrides.get(event_target_key)
-                if not event_matched_dates and override_date_info:
-                    event_matched_dates = [override_date_info[0]]
-                if manual_release_date is not None:
-                    matched_dates = [manual_release_date]
-                    matched_date_kind = "発売日（公式対応表）"
-                elif category == "CD":
-                    matched_dates = album_matched_dates
-                    matched_date_kind = "発売日（自動照合）"
-                elif category == "ソロコレクション":
-                    matched_dates = album_matched_dates or event_matched_dates
-                    matched_date_kind = (
-                        "発売日（自動照合）" if album_matched_dates
-                        else (override_date_info[1] if override_date_info else "公演日（基準）")
-                    )
-                else:
-                    matched_dates = event_matched_dates
-                    matched_date_kind = override_date_info[1] if override_date_info else "公演日（基準）"
-                if matched_dates:
-                    display_price_df.loc[row_index, "日付"] = min(matched_dates)
-                    display_price_df.loc[row_index, "日付種別"] = matched_date_kind
+                if "event_df" in locals() and not event_df.empty:
+                    price_event_name_col = next((c for c in event_df.columns if "公演" in c or "イベント" in c), None)
+                    price_event_date_col = next((c for c in event_df.columns if "日付" in c), None)
+                    if price_event_name_col and price_event_date_col:
+                        for price_event_row in event_df[[price_event_name_col, price_event_date_col]].dropna().drop_duplicates().to_dict("records"):
+                            parsed_date = pd.to_datetime(price_event_row[price_event_date_col], errors="coerce")
+                            if pd.notna(parsed_date):
+                                event_date_candidates.append((
+                                    make_price_event_key(price_event_row[price_event_name_col]), parsed_date
+                                ))
 
-            price_categories = unique_in_registered_order(display_price_df["カテゴリ"].tolist())
-            price_filter_col, price_type_col = st.columns([1, 2])
-            with price_filter_col:
-                selected_price_category = st.selectbox("表示カテゴリ", ["すべて"] + price_categories)
-            price_filtered_df = display_price_df.copy()
-            if selected_price_category != "すべて":
+                # 価格表は「01～08」「Song for Prism ①」のように、ディスコグラフィの
+                # 個別商品名とは異なるまとめ表記を使う。その差分をここで吸収する。
+                def make_price_catalog_key(title):
+                    """CD名の括弧・引用符・@・ハイフンなどの表記揺れを除いた照合キー。"""
+                    normalized = (
+                        clean_song_title_for_search(str(title))
+                        .replace("①", "1周目")
+                        .replace("②", "2周目")
+                        .replace("③", "3周目")
+                        .replace("Synthe-Side", "Synse-Side")
+                        .replace("Synthe Side", "Synse-Side")
+                        .lower()
+                    )
+                    return re.sub(r"[\W_]+", "", normalized, flags=re.UNICODE)
+
+                def make_price_match_keys(title):
+                    raw_title = str(title)
+                    normalized_title = (
+                        raw_title
+                        .replace("①", "1周目")
+                        .replace("②", "2周目")
+                        .replace("③", "3周目")
+                        .replace("全体", "")
+                        .replace("Synthe-Side", "Synse-Side")
+                        .replace("Synthe Side", "Synse-Side")
+                    )
+                    aliases = [make_price_catalog_key(raw_title), make_price_catalog_key(normalized_title)]
+                    manual_aliases = {
+                        "songforprismリフラク": "pjrefractions",
+                        "colorfulfethersシーズ": "colorfulfethersshhis",
+                        "colorfulfethersコメ": "colorfulfetherscometik",
+                        "円環haloaround": "円環haloaround",
+                        "28colorscollection数量限定盤": "28colorscollection",
+                        "28colorscollection通常盤": "28colorscollection",
+                    }
+                    title_key = make_price_catalog_key(raw_title)
+                    if title_key in manual_aliases:
+                        aliases.append(manual_aliases[title_key])
+                    return [alias for alias in aliases if alias]
+
+                # songs_albums.csv に収録曲がない会場CD・企画盤は、公式ディスコグラフィの発売日を使う。
+                price_release_date_overrides = {
+                    make_price_catalog_key("COLORFUL FE@THERS シーズ"): pd.Timestamp("2023-07-26"),
+                    make_price_catalog_key("COLORFUL FE@THERS コメ"): pd.Timestamp("2024-12-04"),
+                    make_price_catalog_key("6thLIVE TOUR Come and Unite! part1"): pd.Timestamp("2024-03-02"),
+                    make_price_catalog_key("6thLIVE TOUR Come and Unite! part2"): pd.Timestamp("2024-03-02"),
+                    make_price_catalog_key("6thLIVE TOUR Come and Unite! part3"): pd.Timestamp("2024-03-02"),
+                    make_price_catalog_key("7th UNITLIVE TOUR 円環 -Halo around- part1"): pd.Timestamp("2025-06-21"),
+                    make_price_catalog_key("7th UNITLIVE TOUR 円環 -Halo around- part2"): pd.Timestamp("2025-06-21"),
+                    make_price_catalog_key("7th UNITLIVE TOUR 円環 -Halo around- part3"): pd.Timestamp("2025-06-21"),
+                    make_price_catalog_key("Beyond the Blue sky part1"): pd.Timestamp("2024-07-27"),
+                    make_price_catalog_key("Beyond the Blue sky part2"): pd.Timestamp("2024-07-27"),
+                    make_price_catalog_key("L@YERED WING part 1"): pd.Timestamp("2022-02-14"),
+                    make_price_catalog_key("L@YERED WING part 2"): pd.Timestamp("2022-02-14"),
+                    make_price_catalog_key("M@STERS OF IDOL WORLD 2025 part1"): pd.Timestamp("2025-12-13"),
+                    make_price_catalog_key("M@STERS OF IDOL WORLD 2025 part2"): pd.Timestamp("2025-12-13"),
+                    make_price_catalog_key("SOLO PERFORMANCE LIVE 我儘なまま Stella"): pd.Timestamp("2023-07-22"),
+                    make_price_catalog_key("SOLO PERFORMANCE LIVE 我儘なまま Luna"): pd.Timestamp("2023-07-22"),
+                    make_price_catalog_key("SOLO PERFORMANCE LIVE 我儘なまま Sol"): pd.Timestamp("2023-07-22"),
+                    make_price_catalog_key("28 colors- COLLECTION 【数量限定盤】"): pd.Timestamp("2025-10-01"),
+                    make_price_catalog_key("28 colors- COLLECTION 【通常盤】"): pd.Timestamp("2025-10-01"),
+                    make_price_catalog_key("HOPEFUL FE@THERS -Stella-"): pd.Timestamp("2026-09-16"),
+                    make_price_catalog_key("HOPEFUL FE@THERS -Luna-"): pd.Timestamp("2026-09-16"),
+                    make_price_catalog_key("HOPEFUL FE@THERS -Sol-"): pd.Timestamp("2026-09-16"),
+                    make_price_catalog_key("OFF VOCAL COLLECTION 01"): pd.Timestamp("2022-01-19"),
+                    make_price_catalog_key("OFF VOCAL COLLECTION 02"): pd.Timestamp("2022-12-07"),
+                    make_price_catalog_key("WING COLLECTION"): pd.Timestamp("2023-01-18"),
+                    make_price_catalog_key("Song for Prism ①"): pd.Timestamp("2023-10-18"),
+                    make_price_catalog_key("Song for Prism ①全体"): pd.Timestamp("2023-10-18"),
+                    make_price_catalog_key("Song for Prism ②"): pd.Timestamp("2024-11-20"),
+                    make_price_catalog_key("Song for Prism ②全体"): pd.Timestamp("2024-11-20"),
+                    make_price_catalog_key("Song for Prism ③"): pd.Timestamp("2025-12-24"),
+                    make_price_catalog_key("Song for Prism ③全体"): pd.Timestamp("2025-12-24"),
+                    make_price_catalog_key("Song for Prism リフラク"): pd.Timestamp("2026-01-07"),
+                }
+
+                for row_index, price_row in display_price_df[display_price_df["日付"].isna()].iterrows():
+                    target_keys = make_price_match_keys(price_row["対象名"])
+                    category = str(price_row["カテゴリ"])
+                    manual_release_date = price_release_date_overrides.get(
+                        make_price_catalog_key(price_row["対象名"])
+                    )
+                    album_matched_dates = [
+                        candidate_date for candidate_key, candidate_date in album_date_candidates
+                        if candidate_key and any(
+                            target_key in make_price_catalog_key(candidate_key)
+                            or make_price_catalog_key(candidate_key) in target_key
+                            for target_key in target_keys
+                        )
+                    ]
+                    event_target_key = make_price_event_key(price_row["対象名"])
+                    event_matched_dates = [
+                        candidate_date for candidate_key, candidate_date in event_date_candidates
+                        if candidate_key and event_target_key and (
+                            event_target_key in candidate_key or candidate_key in event_target_key
+                        )
+                    ]
+                    override_date_info = price_event_date_overrides.get(event_target_key)
+                    if not event_matched_dates and override_date_info:
+                        event_matched_dates = [override_date_info[0]]
+                    if manual_release_date is not None:
+                        matched_dates = [manual_release_date]
+                        matched_date_kind = "発売日（公式対応表）"
+                    elif category == "CD":
+                        matched_dates = album_matched_dates
+                        matched_date_kind = "発売日（自動照合）"
+                    elif category == "ソロコレクション":
+                        matched_dates = album_matched_dates or event_matched_dates
+                        matched_date_kind = (
+                            "発売日（自動照合）" if album_matched_dates
+                            else (override_date_info[1] if override_date_info else "公演日（基準）")
+                        )
+                    else:
+                        matched_dates = event_matched_dates
+                        matched_date_kind = override_date_info[1] if override_date_info else "公演日（基準）"
+                    if matched_dates:
+                        display_price_df.loc[row_index, "日付"] = min(matched_dates)
+                        display_price_df.loc[row_index, "日付種別"] = matched_date_kind
+
+                price_categories = unique_in_registered_order(display_price_df["カテゴリ"].tolist())
+                price_filter_col, price_type_col = st.columns([1, 2])
+                with price_filter_col:
+                    selected_price_category = st.selectbox("表示カテゴリ", ["すべて"] + price_categories)
+                price_filtered_df = display_price_df.copy()
+                if selected_price_category != "すべて":
+                    price_filtered_df = price_filtered_df[
+                        price_filtered_df["カテゴリ"] == selected_price_category
+                    ]
+                price_type_options = unique_in_registered_order(price_filtered_df["価格種別"].tolist())
+                with price_type_col:
+                    selected_price_types = st.multiselect(
+                        "価格種別（比較する項目を選択）",
+                        price_type_options,
+                        default=price_type_options,
+                    )
                 price_filtered_df = price_filtered_df[
-                    price_filtered_df["カテゴリ"] == selected_price_category
-                ]
-            price_type_options = unique_in_registered_order(price_filtered_df["価格種別"].tolist())
-            with price_type_col:
-                selected_price_types = st.multiselect(
-                    "価格種別（比較する項目を選択）",
-                    price_type_options,
-                    default=price_type_options,
-                )
-            price_filtered_df = price_filtered_df[
-                price_filtered_df["価格種別"].isin(selected_price_types)
-            ]
-
-            metric_total, metric_low, metric_high = st.columns(3)
-            metric_total.metric("登録価格", f"{len(price_filtered_df):,}件")
-            metric_low.metric("最安価格", f"¥{int(price_filtered_df['価格'].min()):,}" if not price_filtered_df.empty else "—")
-            metric_high.metric("最高価格", f"¥{int(price_filtered_df['価格'].max()):,}" if not price_filtered_df.empty else "—")
-
-            dated_price_df = price_filtered_df.dropna(subset=["日付"]).sort_values("日付", kind="stable")
-            if not dated_price_df.empty:
-                price_chart = px.line(
-                    dated_price_df,
-                    x="日付",
-                    y="価格",
-                    color="価格種別",
-                    markers=True,
-                    hover_data={"対象名": True, "カテゴリ": True, "日付種別": True, "価格": ":,.0f"},
-                    labels={"日付": "基準日", "価格": "価格（円）", "価格種別": "価格種別"},
-                )
-                price_chart.update_layout(
-                    height=440,
-                    margin=dict(l=20, r=20, t=30, b=20),
-                    legend_title_text="",
-                )
-                render_analysis_chart(price_chart, key="tab13_price_history")
-            else:
-                st.info("この条件では日付を特定できる価格データがありません。日付を price_history.csv に追加すると推移グラフへ表示されます。")
-
-            st.subheader("📋 価格一覧")
-            price_display_columns = [
-                column for column in ["日付", "日付種別", "対象名", "カテゴリ", "価格種別", "価格"]
-                if column in price_filtered_df.columns
-            ]
-            st.dataframe(
-                price_filtered_df.sort_values(["日付", "対象名"], ascending=[False, True], na_position="last")[price_display_columns],
-                use_container_width=True,
-                hide_index=True,
-                column_config={"価格": st.column_config.NumberColumn("価格", format="¥%d")},
-            )
-
-            st.divider()
-            st.subheader("📈 ライブ・リリースの推移")
-            st.caption("価格以外にも、時系列で比較しやすい公演・楽曲データをまとめました。")
-
-            trend_kind = st.radio(
-                "表示する推移",
-                [
-                    "公演ごとの曲数",
-                    "年ごとのリリース曲数",
-                    "年ごとの公演数",
-                    "年ごとの総披露回数",
-                ],
-                horizontal=True,
-                key="tab13_trend_kind",
-            )
-
-            music_history_df = df.copy()
-            if "楽曲名" in music_history_df.columns:
-                music_history_df = music_history_df[
-                    ~music_history_df["楽曲名"].astype(str).str.contains("トークのみ", na=False)
+                    price_filtered_df["価格種別"].isin(selected_price_types)
                 ]
 
-            if trend_kind == "公演ごとの曲数":
-                if live_col_name and "日付_dt" in music_history_df.columns:
-                    event_song_trend_df = (
-                        music_history_df.dropna(subset=["日付_dt"])
-                        .groupby(["日付_dt", live_col_name], as_index=False)
-                        .size()
-                        .rename(columns={"size": "曲数"})
-                        .sort_values("日付_dt", kind="stable")
+                metric_total, metric_low, metric_high = st.columns(3)
+                metric_total.metric("登録価格", f"{len(price_filtered_df):,}件")
+                metric_low.metric("最安価格", f"¥{int(price_filtered_df['価格'].min()):,}" if not price_filtered_df.empty else "—")
+                metric_high.metric("最高価格", f"¥{int(price_filtered_df['価格'].max()):,}" if not price_filtered_df.empty else "—")
+
+                dated_price_df = price_filtered_df.dropna(subset=["日付"]).sort_values("日付", kind="stable")
+                if not dated_price_df.empty:
+                    price_chart = px.line(
+                        dated_price_df,
+                        x="日付",
+                        y="価格",
+                        color="価格種別",
+                        markers=True,
+                        hover_data={"対象名": True, "カテゴリ": True, "日付種別": True, "価格": ":,.0f"},
+                        labels={"日付": "基準日", "価格": "価格（円）", "価格種別": "価格種別"},
                     )
-                    event_song_trend_df["開催年"] = event_song_trend_df["日付_dt"].dt.year
-                    event_song_trend_df["公演名（全文）"] = event_song_trend_df[live_col_name].astype(str)
-                    event_song_trend_df["表示名"] = event_song_trend_df["公演名（全文）"].map(
-                        lambda value: value if len(value) <= 34 else value[:33] + "…"
+                    price_chart.update_layout(
+                        height=440,
+                        margin=dict(l=20, r=20, t=30, b=20),
+                        legend_title_text="",
                     )
-
-                    def classify_trend_live(event_name):
-                        """推移グラフ用の大まかな公演分類を返す。"""
-                        name = str(event_name)
-                        normalized_name = name.lower()
-
-                        # 周年表記を含んでいても、シャニソン連動ライブは優先して分ける。
-                        if (
-                            "chapter 283" in normalized_name
-                            or "星が見上げた空" in name
-                            or ("7th live tour" in normalized_name and "螺旋" in name)
-                        ):
-                            return "シャニソンライブ"
-                        if re.search(
-                            r"(?:\d+(?:\.\d+)?th|∞th)\s*(?:anniversary\s*)?live",
-                            name,
-                            flags=re.IGNORECASE,
-                        ):
-                            return "周年ライブ"
-                        return "その他"
-
-                    event_song_trend_df["公演分類"] = event_song_trend_df["公演名（全文）"].map(
-                        classify_trend_live
-                    )
-                    st.caption("表示する公演分類")
-                    filter_col1, filter_col2, filter_col3 = st.columns(3)
-                    with filter_col1:
-                        show_anniversary_lives = st.checkbox(
-                            "🎂 周年ライブ",
-                            value=True,
-                            key="tab13_show_anniversary_lives",
-                        )
-                    with filter_col2:
-                        show_shiny_song_lives = st.checkbox(
-                            "🎮 シャニソンライブ",
-                            value=True,
-                            key="tab13_show_shiny_song_lives",
-                        )
-                    with filter_col3:
-                        show_other_lives = st.checkbox(
-                            "📌 その他の公演",
-                            value=True,
-                            key="tab13_show_other_lives",
-                        )
-
-                    selected_live_groups = []
-                    if show_anniversary_lives:
-                        selected_live_groups.append("周年ライブ")
-                    if show_shiny_song_lives:
-                        selected_live_groups.append("シャニソンライブ")
-                    if show_other_lives:
-                        selected_live_groups.append("その他")
-
-                    if not selected_live_groups:
-                        st.info("表示する公演分類を1つ以上選択してください。")
-                        event_song_trend_df = event_song_trend_df.iloc[0:0]
-                    else:
-                        event_song_trend_df = event_song_trend_df[
-                            event_song_trend_df["公演分類"].isin(selected_live_groups)
-                        ].copy()
-
-                    selected_years = sorted(event_song_trend_df["日付_dt"].dt.year.unique(), reverse=True)
-                    selected_event_year = st.selectbox(
-                        "表示する期間",
-                        ["すべて（時系列）"] + selected_years,
-                        key="tab13_event_song_year",
-                    )
-                    trend_chart = None
-                    if event_song_trend_df.empty:
-                        st.info("条件に一致する公演がありません。")
-                    elif selected_event_year == "すべて（時系列）":
-                        trend_chart = px.line(
-                            event_song_trend_df.sort_values("日付_dt", kind="stable"),
-                            x="日付_dt",
-                            y="曲数",
-                            markers=True,
-                            hover_data={"公演名（全文）": True, "開催年": True},
-                            labels={"日付_dt": "開催日", "曲数": "曲数"},
-                        )
-                        trend_chart.update_traces(marker={"size": 8}, line={"width": 2})
-                        trend_chart.update_layout(
-                            height=440,
-                            margin=dict(l=20, r=20, t=30, b=20),
-                            hovermode="x unified",
-                        )
-                    else:
-                        event_song_trend_df = event_song_trend_df[
-                            event_song_trend_df["開催年"] == selected_event_year
-                        ].sort_values("日付_dt", ascending=False, kind="stable")
-                        trend_chart = px.bar(
-                            event_song_trend_df,
-                            x="曲数",
-                            y="表示名",
-                            orientation="h",
-                            color="曲数",
-                            color_continuous_scale="Blues",
-                            hover_data={"日付_dt": "|%Y/%m/%d", "公演名（全文）": True},
-                            labels={"表示名": "公演", "曲数": "曲数"},
-                        )
-                        trend_chart.update_layout(
-                            height=max(420, len(event_song_trend_df) * 30 + 110),
-                            margin=dict(l=20, r=20, t=30, b=20),
-                            coloraxis_showscale=False,
-                            yaxis={"categoryorder": "array", "categoryarray": event_song_trend_df["表示名"].tolist()},
-                        )
-                    if trend_chart is not None:
-                        render_analysis_chart(trend_chart, key="tab13_event_song_trend")
-                        st.dataframe(
-                            event_song_trend_df[["日付_dt", live_col_name, "曲数"]].sort_values("日付_dt", ascending=False),
-                            use_container_width=True,
-                            hide_index=True,
-                            column_config={"日付_dt": st.column_config.DateColumn("日付", format="YYYY/MM/DD")},
-                        )
+                    render_analysis_chart(price_chart, key="tab13_price_history")
                 else:
-                    st.info("公演名と日付のデータが揃うと、公演ごとの曲数を表示できます。")
-            elif trend_kind == "年ごとのリリース曲数":
-                release_date_col = next((column for column in song_album_df.columns if "リリース" in column or "発売日" in column), None)
-                release_song_col = next((column for column in song_album_df.columns if "楽曲" in column), None)
-                if release_date_col and release_song_col:
-                    release_trend_df = song_album_df[[release_date_col, release_song_col]].copy()
-                    release_trend_df["リリース日_dt"] = pd.to_datetime(release_trend_df[release_date_col], errors="coerce")
-                    release_trend_df = release_trend_df.dropna(subset=["リリース日_dt"])
-                    release_trend_df["年"] = release_trend_df["リリース日_dt"].dt.year
-                    release_trend_df = (
-                        release_trend_df.groupby("年", as_index=False)[release_song_col]
-                        .nunique()
-                        .rename(columns={release_song_col: "リリース曲数"})
-                    )
-                    trend_chart = px.bar(
-                        release_trend_df,
-                        x="年",
-                        y="リリース曲数",
-                        text="リリース曲数",
-                        color="リリース曲数",
-                        color_continuous_scale="Purples",
-                    )
-                    trend_chart.update_layout(height=440, margin=dict(l=20, r=20, t=30, b=20), coloraxis_showscale=False)
-                    render_analysis_chart(trend_chart, key="tab13_release_song_trend")
-                else:
-                    st.info("楽曲×アルバムに発売日・楽曲名を登録すると、年ごとのリリース曲数を表示できます。")
-            else:
-                if "日付_dt" in music_history_df.columns:
-                    event_year_df = music_history_df.dropna(subset=["日付_dt"]).copy()
-                    event_year_df["年"] = event_year_df["日付_dt"].dt.year
-                    if trend_kind == "年ごとの公演数":
-                        if live_col_name:
-                            trend_df = (
-                                event_year_df.groupby("年", as_index=False)[live_col_name]
-                                .nunique()
-                                .rename(columns={live_col_name: "公演数"})
+                    st.info("この条件では日付を特定できる価格データがありません。日付を price_history.csv に追加すると推移グラフへ表示されます。")
+
+                st.subheader("📋 価格一覧")
+                price_display_columns = [
+                    column for column in ["日付", "日付種別", "対象名", "カテゴリ", "価格種別", "価格"]
+                    if column in price_filtered_df.columns
+                ]
+                st.dataframe(
+                    price_filtered_df.sort_values(["日付", "対象名"], ascending=[False, True], na_position="last")[price_display_columns],
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={"価格": st.column_config.NumberColumn("価格", format="¥%d")},
+                )
+
+                st.divider()
+                st.subheader("📈 ライブ・リリースの推移")
+                st.caption("価格以外にも、時系列で比較しやすい公演・楽曲データをまとめました。")
+
+                trend_kind = st.radio(
+                    "表示する推移",
+                    [
+                        "公演ごとの曲数",
+                        "年ごとのリリース曲数",
+                        "年ごとの公演数",
+                        "年ごとの総披露回数",
+                    ],
+                    horizontal=True,
+                    key="tab13_trend_kind",
+                )
+
+                music_history_df = df.copy()
+                if "楽曲名" in music_history_df.columns:
+                    music_history_df = music_history_df[
+                        ~music_history_df["楽曲名"].astype(str).str.contains("トークのみ", na=False)
+                    ]
+
+                if trend_kind == "公演ごとの曲数":
+                    if live_col_name and "日付_dt" in music_history_df.columns:
+                        event_song_trend_df = (
+                            music_history_df.dropna(subset=["日付_dt"])
+                            .groupby(["日付_dt", live_col_name], as_index=False)
+                            .size()
+                            .rename(columns={"size": "曲数"})
+                            .sort_values("日付_dt", kind="stable")
+                        )
+                        event_song_trend_df["開催年"] = event_song_trend_df["日付_dt"].dt.year
+                        event_song_trend_df["公演名（全文）"] = event_song_trend_df[live_col_name].astype(str)
+                        event_song_trend_df["表示名"] = event_song_trend_df["公演名（全文）"].map(
+                            lambda value: value if len(value) <= 34 else value[:33] + "…"
+                        )
+
+                        def classify_trend_live(event_name):
+                            """推移グラフ用の大まかな公演分類を返す。"""
+                            name = str(event_name)
+                            normalized_name = name.lower()
+
+                            # 周年表記を含んでいても、シャニソン連動ライブは優先して分ける。
+                            if (
+                                "chapter 283" in normalized_name
+                                or "星が見上げた空" in name
+                                or ("7th live tour" in normalized_name and "螺旋" in name)
+                            ):
+                                return "シャニソンライブ"
+                            if re.search(
+                                r"(?:\d+(?:\.\d+)?th|∞th)\s*(?:anniversary\s*)?live",
+                                name,
+                                flags=re.IGNORECASE,
+                            ):
+                                return "周年ライブ"
+                            return "その他"
+
+                        event_song_trend_df["公演分類"] = event_song_trend_df["公演名（全文）"].map(
+                            classify_trend_live
+                        )
+                        st.caption("表示する公演分類")
+                        filter_col1, filter_col2, filter_col3 = st.columns(3)
+                        with filter_col1:
+                            show_anniversary_lives = st.checkbox(
+                                "🎂 周年ライブ",
+                                value=True,
+                                key="tab13_show_anniversary_lives",
                             )
-                            value_column = "公演数"
+                        with filter_col2:
+                            show_shiny_song_lives = st.checkbox(
+                                "🎮 シャニソンライブ",
+                                value=True,
+                                key="tab13_show_shiny_song_lives",
+                            )
+                        with filter_col3:
+                            show_other_lives = st.checkbox(
+                                "📌 その他の公演",
+                                value=True,
+                                key="tab13_show_other_lives",
+                            )
+
+                        selected_live_groups = []
+                        if show_anniversary_lives:
+                            selected_live_groups.append("周年ライブ")
+                        if show_shiny_song_lives:
+                            selected_live_groups.append("シャニソンライブ")
+                        if show_other_lives:
+                            selected_live_groups.append("その他")
+
+                        if not selected_live_groups:
+                            st.info("表示する公演分類を1つ以上選択してください。")
+                            event_song_trend_df = event_song_trend_df.iloc[0:0]
                         else:
-                            trend_df = pd.DataFrame(columns=["年", "公演数"])
-                            value_column = "公演数"
+                            event_song_trend_df = event_song_trend_df[
+                                event_song_trend_df["公演分類"].isin(selected_live_groups)
+                            ].copy()
+
+                        selected_years = sorted(event_song_trend_df["日付_dt"].dt.year.unique(), reverse=True)
+                        selected_event_year = st.selectbox(
+                            "表示する期間",
+                            ["すべて（時系列）"] + selected_years,
+                            key="tab13_event_song_year",
+                        )
+                        trend_chart = None
+                        if event_song_trend_df.empty:
+                            st.info("条件に一致する公演がありません。")
+                        elif selected_event_year == "すべて（時系列）":
+                            trend_chart = px.line(
+                                event_song_trend_df.sort_values("日付_dt", kind="stable"),
+                                x="日付_dt",
+                                y="曲数",
+                                markers=True,
+                                hover_data={"公演名（全文）": True, "開催年": True},
+                                labels={"日付_dt": "開催日", "曲数": "曲数"},
+                            )
+                            trend_chart.update_traces(marker={"size": 8}, line={"width": 2})
+                            trend_chart.update_layout(
+                                height=440,
+                                margin=dict(l=20, r=20, t=30, b=20),
+                                hovermode="x unified",
+                            )
+                        else:
+                            event_song_trend_df = event_song_trend_df[
+                                event_song_trend_df["開催年"] == selected_event_year
+                            ].sort_values("日付_dt", ascending=False, kind="stable")
+                            trend_chart = px.bar(
+                                event_song_trend_df,
+                                x="曲数",
+                                y="表示名",
+                                orientation="h",
+                                color="曲数",
+                                color_continuous_scale="Blues",
+                                hover_data={"日付_dt": "|%Y/%m/%d", "公演名（全文）": True},
+                                labels={"表示名": "公演", "曲数": "曲数"},
+                            )
+                            trend_chart.update_layout(
+                                height=max(420, len(event_song_trend_df) * 30 + 110),
+                                margin=dict(l=20, r=20, t=30, b=20),
+                                coloraxis_showscale=False,
+                                yaxis={"categoryorder": "array", "categoryarray": event_song_trend_df["表示名"].tolist()},
+                            )
+                        if trend_chart is not None:
+                            render_analysis_chart(trend_chart, key="tab13_event_song_trend")
+                            st.dataframe(
+                                event_song_trend_df[["日付_dt", live_col_name, "曲数"]].sort_values("日付_dt", ascending=False),
+                                use_container_width=True,
+                                hide_index=True,
+                                column_config={"日付_dt": st.column_config.DateColumn("日付", format="YYYY/MM/DD")},
+                            )
                     else:
-                        trend_df = event_year_df.groupby("年", as_index=False).size().rename(columns={"size": "総披露回数"})
-                        value_column = "総披露回数"
-                    trend_chart = px.bar(
-                        trend_df,
-                        x="年",
-                        y=value_column,
-                        text=value_column,
-                        color=value_column,
-                        color_continuous_scale="Teal",
-                    )
-                    trend_chart.update_layout(height=440, margin=dict(l=20, r=20, t=30, b=20), coloraxis_showscale=False)
-                    render_analysis_chart(trend_chart, key="tab13_total_performance_trend")
+                        st.info("公演名と日付のデータが揃うと、公演ごとの曲数を表示できます。")
+                elif trend_kind == "年ごとのリリース曲数":
+                    release_date_col = next((column for column in song_album_df.columns if "リリース" in column or "発売日" in column), None)
+                    release_song_col = next((column for column in song_album_df.columns if "楽曲" in column), None)
+                    if release_date_col and release_song_col:
+                        release_trend_df = song_album_df[[release_date_col, release_song_col]].copy()
+                        release_trend_df["リリース日_dt"] = pd.to_datetime(release_trend_df[release_date_col], errors="coerce")
+                        release_trend_df = release_trend_df.dropna(subset=["リリース日_dt"])
+                        release_trend_df["年"] = release_trend_df["リリース日_dt"].dt.year
+                        release_trend_df = (
+                            release_trend_df.groupby("年", as_index=False)[release_song_col]
+                            .nunique()
+                            .rename(columns={release_song_col: "リリース曲数"})
+                        )
+                        trend_chart = px.bar(
+                            release_trend_df,
+                            x="年",
+                            y="リリース曲数",
+                            text="リリース曲数",
+                            color="リリース曲数",
+                            color_continuous_scale="Purples",
+                        )
+                        trend_chart.update_layout(height=440, margin=dict(l=20, r=20, t=30, b=20), coloraxis_showscale=False)
+                        render_analysis_chart(trend_chart, key="tab13_release_song_trend")
+                    else:
+                        st.info("楽曲×アルバムに発売日・楽曲名を登録すると、年ごとのリリース曲数を表示できます。")
                 else:
-                    st.info("日付データを登録すると、年ごとの公演・披露回数を表示できます。")
+                    if "日付_dt" in music_history_df.columns:
+                        event_year_df = music_history_df.dropna(subset=["日付_dt"]).copy()
+                        event_year_df["年"] = event_year_df["日付_dt"].dt.year
+                        if trend_kind == "年ごとの公演数":
+                            if live_col_name:
+                                trend_df = (
+                                    event_year_df.groupby("年", as_index=False)[live_col_name]
+                                    .nunique()
+                                    .rename(columns={live_col_name: "公演数"})
+                                )
+                                value_column = "公演数"
+                            else:
+                                trend_df = pd.DataFrame(columns=["年", "公演数"])
+                                value_column = "公演数"
+                        else:
+                            trend_df = event_year_df.groupby("年", as_index=False).size().rename(columns={"size": "総披露回数"})
+                            value_column = "総披露回数"
+                        trend_chart = px.bar(
+                            trend_df,
+                            x="年",
+                            y=value_column,
+                            text=value_column,
+                            color=value_column,
+                            color_continuous_scale="Teal",
+                        )
+                        trend_chart.update_layout(height=440, margin=dict(l=20, r=20, t=30, b=20), coloraxis_showscale=False)
+                        render_analysis_chart(trend_chart, key="tab13_total_performance_trend")
+                    else:
+                        st.info("日付データを登録すると、年ごとの公演・披露回数を表示できます。")
 
 else:
     st.warning("⚠️ `songs.csv` が見つかりません。配置をご確認ください。")
