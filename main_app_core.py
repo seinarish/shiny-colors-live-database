@@ -967,6 +967,49 @@ st.markdown(
             overflow-wrap: normal !important;
         }
     }
+    .ranking-card-list {
+        display: grid;
+        gap: 0.55rem;
+        margin-top: 0.55rem;
+    }
+    .ranking-card {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid rgba(102, 87, 217, 0.2);
+        border-radius: 12px;
+        padding: 0.72rem 0.85rem;
+        box-shadow: 0 4px 13px rgba(54, 47, 117, 0.06);
+    }
+    .ranking-card--1 { border-left: 5px solid #d7a61d; background: #fff9e6; }
+    .ranking-card--2 { border-left: 5px solid #9aa3ac; background: #f5f6f7; }
+    .ranking-card--3 { border-left: 5px solid #c97a77; background: #fff3f2; }
+    .ranking-card-title {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        color: #29274f !important;
+        font-size: 1.02rem;
+        line-height: 1.4;
+    }
+    .ranking-card-rank {
+        display: inline-grid;
+        place-items: center;
+        width: 1.8rem;
+        height: 1.8rem;
+        flex: 0 0 1.8rem;
+        border-radius: 50%;
+        background: #6158b8;
+        color: #ffffff !important;
+        font-weight: 800;
+    }
+    .ranking-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem 1rem;
+        margin: 0.65rem 0 0;
+    }
+    .ranking-card-meta div { display: flex; gap: 0.25rem; }
+    .ranking-card-meta dt { color: #6d6899 !important; font-size: 0.8rem; }
+    .ranking-card-meta dd { margin: 0; color: #35335e !important; font-size: 0.8rem; font-weight: 700; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -2954,28 +2997,37 @@ if os.path.exists(SETLIST_FILE):
                 aggregated_rank = aggregated_rank.sort_values(by="経過日数_num", ascending=False)
 
             display_rank = aggregated_rank[[rank_target, count_col_name, "最終披露日", "前回からの経過"]].reset_index(drop=True)
-            display_rank.index = display_rank.index + 1
+            # スマホでは曲名（または衣装・ユニット名）を先頭にし、順位を次に表示する。
+            display_rank.insert(1, "順位", range(1, len(display_rank) + 1))
             
             # 1〜3位の行を強調表示するハイライト関数
             def highlight_top3_rows(row):
                 idx = row.name
-                if idx == 1:
+                if idx == 0:
                     return ['background-color: #FFF3CD; color: #856404; font-weight: bold;'] * len(row)
-                elif idx == 2:
+                elif idx == 1:
                     return ['background-color: #E2E3E5; color: #383D41; font-weight: bold;'] * len(row)
-                elif idx == 3:
+                elif idx == 2:
                     return ['background-color: #F8D7DA; color: #721C24; font-weight: bold;'] * len(row)
                 return [''] * len(row)
 
             st.markdown("### 📋 ランキング詳細一覧")
-            st.dataframe(
-                display_rank.style.apply(highlight_top3_rows, axis=1), 
-                use_container_width=True,
-                column_config={
-                    rank_target: st.column_config.TextColumn(rank_target, width="large"),
-                    "最終披露日": st.column_config.TextColumn("最終披露日", width="small"),
-                    "前回からの経過": st.column_config.TextColumn("前回からの経過", width="medium"),
-                }
+            ranking_cards = []
+            for _, rank_row in display_rank.iterrows():
+                rank_number = int(rank_row["??"])
+                ranking_cards.append(
+                    f"<article class='ranking-card ranking-card--{min(rank_number, 4)}'>"
+                    f"<div class='ranking-card-title'><span class='ranking-card-rank'>{rank_number}</span>"
+                    f"<strong>{html.escape(str(rank_row[rank_target]))}</strong></div>"
+                    f"<dl class='ranking-card-meta'>"
+                    f"<div><dt>{html.escape(str(count_col_name))}</dt><dd>{html.escape(str(rank_row[count_col_name]))}</dd></div>"
+                    f"<div><dt>?????</dt><dd>{html.escape(str(rank_row['?????']))}</dd></div>"
+                    f"<div><dt>???????</dt><dd>{html.escape(str(rank_row['???????']))}</dd></div>"
+                    f"</dl></article>"
+                )
+            st.markdown(
+                "<div class='ranking-card-list'>" + "".join(ranking_cards) + "</div>",
+                unsafe_allow_html=True,
             )
         else:
             st.info("該当するデータがありません。")
