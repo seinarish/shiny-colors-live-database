@@ -6282,9 +6282,5 @@ if os.path.exists(SETLIST_FILE):
                 else:
                     st.info("日付データを登録すると、年ごとの公演・披露回数を表示できます。")
 
-    if PUBLIC_MODE:
-        # 非公開タブのコンテナを最後に消し、編集フォーム等を公開画面に残さない。
-        _private_tab_placeholder.empty()
-
 else:
     st.warning("⚠️ `songs.csv` が見つかりません。配置をご確認ください。")
