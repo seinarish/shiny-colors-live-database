@@ -2785,10 +2785,10 @@ if os.path.exists(SETLIST_FILE):
     home_costume_col = next((c for c in df.columns if "衣装" in c), None)
     if PUBLIC_MODE:
         # 公開版には、編集・歌詞本文・ローカル画像のタブをそもそも作らない。
-        tab1, tab2, tab3, tab4, tab8, tab9, tab14, tab16, tab17 = st.tabs(
+        tab1, tab2, tab3, tab4, tab8, tab9, tab16, tab17 = st.tabs(
             [
                 "📊 分析", "🎵 楽曲", "🎤 歌唱・衣装", "👗 衣装",
-                "🏟️ 公演", "👥 参加履歴", "📅 スケジュール予想", "📚 分類ガイド", "🔰 使い方",
+                "🏟️ 公演", "👥 参加履歴", "📚 分類ガイド", "🔰 使い方",
             ]
         )
     else:
@@ -5978,9 +5978,9 @@ if os.path.exists(SETLIST_FILE):
                 st.subheader("📋 今月の予定一覧")
                 st.dataframe(month_df.sort_values("日付")[["日付", "種類", "内容"]], use_container_width=True, hide_index=True)
 
-    # TAB 13: 価格推移
-    with tab14:
-        render_schedule_prediction()
+    if not PUBLIC_MODE:
+        with tab14:
+            render_schedule_prediction()
 
     if not PUBLIC_MODE:
         with tab15:
@@ -6056,7 +6056,6 @@ if os.path.exists(SETLIST_FILE):
                         ["👗 衣装", "衣装の着用記録と最後に着用された日を確認する"],
                         ["🏟️ 公演", "公演ごとのセットリストや前回披露からの間隔を見る"],
                         ["👥 参加履歴", "出演者ごとの公演参加記録を見る"],
-                        ["📅 スケジュール予想", "過去の傾向から販売日程の目安を確認する"],
                         ["📚 分類ガイド", "このサイト独自の分類ルールを確認する"],
                     ],
                     columns=["タブ", "できること"],
@@ -6065,13 +6064,6 @@ if os.path.exists(SETLIST_FILE):
                 hide_index=True,
             )
 
-            with st.expander("スケジュール予想について"):
-                st.markdown(
-                    """
-                    発表日やDAY1をもとに、過去の販売日程から日付の目安を出します。<br>
-                    公式発表ではなく、過去データに基づく参考情報です。公演ごとの事情によって大きく変わる場合があります。
-                    """
-                )
             with st.expander("データの見方・注意"):
                 st.markdown(
                     """
