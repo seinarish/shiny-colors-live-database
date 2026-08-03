@@ -1720,7 +1720,6 @@ def build_song_media_options(
     video_variants_df,
     album_name="",
     contextual_media_df=None,
-    album_preview_df=None,
 ):
     """選択曲に紐づく公式YouTubeの音源・MVを、重複なく選択肢にする。"""
     song_key = make_search_key(song_name)
@@ -1759,25 +1758,6 @@ def build_song_media_options(
                 contextual_match_found = True
                 add_option("公式音源", f"公式音源｜{row['対象アルバム']}", row["YouTube_URL"])
 
-    # 収録アルバム単位の試聴動画。曲の選択中でも、今選んでいるアルバムに
-    # 対応した動画だけを候補へ加える。
-    if album_preview_df is not None and not album_preview_df.empty and {"アルバム", "種別", "YouTube_URL"}.issubset(album_preview_df.columns):
-        selected_album_key = make_search_key(album_name)
-        preview_album_keys = (
-            album_preview_df["_album_search_key"]
-            if "_album_search_key" in album_preview_df.columns
-            else album_preview_df["アルバム"].map(make_search_key)
-        )
-        if selected_album_key:
-            matched_previews = album_preview_df[
-                preview_album_keys.map(
-                    lambda preview_key: preview_key in selected_album_key
-                    or selected_album_key in preview_key
-                )
-            ]
-            for row in matched_previews.to_dict("records"):
-                add_option(str(row["種別"]), f"{row['種別']}｜{row['アルバム']}", row["YouTube_URL"])
-
     # Migratory Echoes は収録盤ごとの音源が最優先。ECHOES 09 の
     # 汎用音源で上書きしないよう、文脈一致時は通常音源候補を追加しない。
     if not contextual_match_found and not audio_draft_df.empty and {"楽曲名", "公式音源_URL"}.issubset(audio_draft_df.columns):
@@ -1812,6 +1792,37 @@ def build_song_media_options(
         for row in matched.to_dict("records"):
             add_option(str(row["種別"]), f"{row['種別']}｜{row['バージョン表示']}", row["YouTube_URL"])
 
+    return options
+
+
+@st.cache_data(show_spinner=False, max_entries=128)
+def build_album_preview_options(album_name, album_preview_df):
+    """選択中の収録アルバムに紐づく試聴動画だけを返す。"""
+    if not album_name or album_preview_df is None or album_preview_df.empty:
+        return []
+    if not {"アルバム", "種別", "YouTube_URL"}.issubset(album_preview_df.columns):
+        return []
+
+    selected_album_key = make_search_key(album_name)
+    preview_album_keys = (
+        album_preview_df["_album_search_key"]
+        if "_album_search_key" in album_preview_df.columns
+        else album_preview_df["アルバム"].map(make_search_key)
+    )
+    matched_previews = album_preview_df[
+        preview_album_keys.map(
+            lambda preview_key: preview_key in selected_album_key
+            or selected_album_key in preview_key
+        )
+    ]
+    options, seen_urls = [], set()
+    for row in matched_previews.to_dict("records"):
+        url = str(row["YouTube_URL"]).strip()
+        if not url or url == "nan" or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        kind = str(row["種別"])
+        options.append({"種別": kind, "表示": f"{kind}｜{row['アルバム']}", "URL": url})
     return options
 
 
@@ -3415,7 +3426,6 @@ if os.path.exists(SETLIST_FILE):
                 youtube_video_variants_df,
                 sel_album,
                 migratory_echoes_media_df,
-                youtube_album_preview_df,
             )
 
             selected_album_row = pd.DataFrame()
@@ -3436,6 +3446,10 @@ if os.path.exists(SETLIST_FILE):
                 else (str(selected_album_row.iloc[0][song_alb_col]) if not selected_album_row.empty else "")
             )
             selected_jacket_path = get_song_jacket_path(selected_song, selected_album) if selected_album else None
+            album_preview_options = build_album_preview_options(
+                selected_album,
+                youtube_album_preview_df,
+            )
             if PUBLIC_MODE:
                 # 画像ファイルは公開せず、公式YouTubeの再生画面を主役にする。
                 album_info_col, media_col = st.columns([1, 1.55])
@@ -3459,6 +3473,17 @@ if os.path.exists(SETLIST_FILE):
                         ]
                         if not series_match.empty:
                             st.caption(f"シリーズ: {series_match.iloc[0][series_col]}")
+                    if album_preview_options:
+                        st.markdown("##### ▶️ 視聴動画")
+                        selected_preview_index = st.selectbox(
+                            "視聴する動画を選択:",
+                            range(len(album_preview_options)),
+                            format_func=lambda index: album_preview_options[index]["表示"],
+                            key=f"tab2_album_preview_{make_search_key(selected_song)}",
+                        )
+                        selected_preview = album_preview_options[selected_preview_index]
+                        render_compact_youtube(selected_preview["URL"], selected_preview["表示"])
+                        st.link_button("YouTubeで開く", selected_preview["URL"])
             with media_col:
                 if song_media_options:
                     st.subheader("▶️ 公式音源・MV")
