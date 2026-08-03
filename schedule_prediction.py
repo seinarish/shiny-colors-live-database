@@ -544,6 +544,24 @@ def _apply_ticket_phase_spacing(
     return result
 
 
+def _strong_relationship_priority(source: str, target: str) -> int:
+    """Give proven cross-schedule relationships priority over generic correlations."""
+    source_label = _short_label(source)
+    target_label = _short_label(target)
+    if "イベントグッズ事前販売" in source_label and "終了" in source_label and "パンフレットオフショット公開" in target_label:
+        return 100
+    if "ゲーム先行" in source_label and "一般発売" in target_label and "抽選" in target_label:
+        if "終了" in source_label and ("開始" in target_label or "終了" in target_label):
+            return 80
+        if "当落" in source_label and any(action in target_label for action in ("開始", "終了", "当落")):
+            return 80
+    if "一般発売" in source_label and "先着" in source_label and "終了" in source_label and "リセール" in target_label and "受付終了" in target_label:
+        return 60
+    if "リセール" in source_label and "受付終了" in source_label and "一般発売" in target_label and ("二次" in target_label or "2次" in target_label) and "先着" in target_label and "開始" in target_label:
+        return 60
+    return 0
+
+
 def _apply_strong_schedule_relationships(
     result: pd.DataFrame,
     history: pd.DataFrame,
@@ -565,6 +583,9 @@ def _apply_strong_schedule_relationships(
         for source in columns:
             if source == target:
                 continue
+            # Do not allow the reverse direction of a proven relationship to move its anchor.
+            if _strong_relationship_priority(target, source):
+                continue
             gaps = (
                 history[target].map(_parse_date) - history[source].map(_parse_date)
             ).dropna().dt.days
@@ -577,7 +598,7 @@ def _apply_strong_schedule_relationships(
             spread = int((dense - dense.median()).abs().quantile(0.80))
             if spread > 3 or abs(median_gap) > 45:
                 continue
-            score = len(dense) / (1 + spread)
+            score = _strong_relationship_priority(source, target) + len(dense) / (1 + spread)
             relationships.append((score, target, source, median_gap, max(2, spread)))
 
     selected_targets: set[str] = set()
