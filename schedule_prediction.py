@@ -562,6 +562,15 @@ def _strong_relationship_priority(source: str, target: str) -> int:
     return 0
 
 
+def _dominant_offset(offsets: pd.Series) -> int:
+    """Prefer the most frequently observed exact gap for strong schedule relationships."""
+    counts = offsets.value_counts()
+    highest_count = counts.max()
+    candidates = [int(value) for value in counts[counts == highest_count].index]
+    center = float(offsets.median())
+    return min(candidates, key=lambda value: abs(value - center))
+
+
 def _apply_strong_schedule_relationships(
     result: pd.DataFrame,
     history: pd.DataFrame,
@@ -594,12 +603,12 @@ def _apply_strong_schedule_relationships(
             dense = _densest_offsets(gaps)
             if len(dense) < 5 or len(dense) / len(gaps) < 0.70:
                 continue
-            median_gap = int(round(dense.median()))
-            spread = int((dense - dense.median()).abs().quantile(0.80))
-            if spread > 3 or abs(median_gap) > 45:
+            dominant_gap = _dominant_offset(dense)
+            spread = int((dense - dominant_gap).abs().quantile(0.80))
+            if spread > 3 or abs(dominant_gap) > 45:
                 continue
             score = _strong_relationship_priority(source, target) + len(dense) / (1 + spread)
-            relationships.append((score, target, source, median_gap, max(2, spread)))
+            relationships.append((score, target, source, dominant_gap, max(2, spread)))
 
     selected_targets: set[str] = set()
     for _, target, source, gap_days, gap_error in sorted(relationships, reverse=True):
