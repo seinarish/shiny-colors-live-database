@@ -3109,7 +3109,7 @@ if os.path.exists(SETLIST_FILE):
 
             display_rank = aggregated_rank[[rank_target, count_col_name, "最終披露日", "前回からの経過"]].reset_index(drop=True)
             # 一覧では順位を最初に置くと、縦に追って比較しやすい。
-            rank_value_col = count_col_name if rank_order in {"多い順", "少ない順"} else "前回からの経過_num"
+            rank_value_col = count_col_name if rank_order in {"多い順", "少ない順"} else "経過日数_num"
             rank_ascending = rank_order == "少ない順"
             display_rank.insert(
                 0,
