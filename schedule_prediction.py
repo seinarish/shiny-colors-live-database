@@ -544,6 +544,61 @@ def _apply_ticket_phase_spacing(
     return result
 
 
+def _apply_strong_schedule_relationships(
+    result: pd.DataFrame,
+    history: pd.DataFrame,
+    known_dates: dict[str, pd.Timestamp],
+    as_of_date: pd.Timestamp | None,
+) -> pd.DataFrame:
+    """Adjust a date only when another displayed schedule has a stable historical gap."""
+    if result.empty:
+        return result
+    result = result.copy()
+    result["予想日"] = pd.to_datetime(result["予想日"])
+    rows_by_column = {str(row["_column"]): index for index, row in result.iterrows()}
+    columns = list(rows_by_column)
+    relationships: list[tuple[float, str, str, int, int]] = []
+
+    for target in columns:
+        if target in known_dates:
+            continue
+        for source in columns:
+            if source == target:
+                continue
+            gaps = (
+                history[target].map(_parse_date) - history[source].map(_parse_date)
+            ).dropna().dt.days
+            if len(gaps) < 5:
+                continue
+            dense = _densest_offsets(gaps)
+            if len(dense) < 5 or len(dense) / len(gaps) < 0.70:
+                continue
+            median_gap = int(round(dense.median()))
+            spread = int((dense - dense.median()).abs().quantile(0.80))
+            if spread > 3 or abs(median_gap) > 45:
+                continue
+            score = len(dense) / (1 + spread)
+            relationships.append((score, target, source, median_gap, max(2, spread)))
+
+    selected_targets: set[str] = set()
+    for _, target, source, gap_days, gap_error in sorted(relationships, reverse=True):
+        if target in selected_targets:
+            continue
+        target_index = rows_by_column[target]
+        source_index = rows_by_column[source]
+        predicted = result.at[source_index, "予想日"] + pd.Timedelta(days=gap_days)
+        if as_of_date is not None and predicted < as_of_date:
+            predicted = as_of_date
+        result.at[target_index, "予想日"] = predicted
+        result.at[target_index, "目安の範囲"] = f"±{gap_error}日"
+        result.at[target_index, "採用基準"] = f"{_short_label(source)}との強い日程関係"
+        result.at[target_index, "期間による補正"] = f"過去の中心値 {gap_days:+d}日"
+        selected_targets.add(target)
+
+    result["予想日"] = result["予想日"].dt.date
+    return result
+
+
 def _prediction_row(
     history: pd.DataFrame,
     column: str,
@@ -977,6 +1032,7 @@ def render_schedule_prediction() -> None:
         return
 
     result = _apply_ticket_phase_spacing(result, prediction_history, known_dates)
+    result = _apply_strong_schedule_relationships(result, prediction_history, known_dates, as_of_date)
     order_constraints = _learn_order_constraints(prediction_history, list(dict.fromkeys(selected_columns)))
     result = _enforce_order_constraints(result, order_constraints)
     result = result.sort_values("予想日", kind="stable")
