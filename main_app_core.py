@@ -6001,6 +6001,66 @@ if os.path.exists(SETLIST_FILE):
             )
             st.info("分類は検索や集計をしやすくするための管理上の目安です。公式発表の分類ではありません。")
 
+            st.subheader("🔎 曲・公演の分類を調べる")
+            classification_query = st.text_input(
+                "曲名または公演名を入力",
+                placeholder="例：Spread the Wings!!、5thLIVE",
+                key="classification_guide_query",
+            ).strip()
+            if classification_query:
+                song_matches = unique_in_registered_order(
+                    df.loc[
+                        df["楽曲名"].astype(str).str.contains(
+                            classification_query, case=False, regex=False, na=False
+                        ),
+                        "楽曲名",
+                    ].tolist()
+                )
+                event_name_col = next(
+                    (column for column in event_df.columns if "公演" in column or "イベント" in column or "ライブ" in column),
+                    None,
+                ) if not event_df.empty else None
+                event_type_col = next(
+                    (column for column in event_df.columns if "区分" in column or "種別" in column or "タイプ" in column),
+                    None,
+                ) if not event_df.empty else None
+                event_matches = []
+                if event_name_col:
+                    event_matches = unique_in_registered_order(
+                        event_df.loc[
+                            event_df[event_name_col].astype(str).str.contains(
+                                classification_query, case=False, regex=False, na=False
+                            ),
+                            event_name_col,
+                        ].tolist()
+                    )
+
+                if not song_matches and not event_matches:
+                    st.info("一致する楽曲・公演は見つかりませんでした。表記の一部でも検索できます。")
+                result_col1, result_col2 = st.columns(2)
+                with result_col1:
+                    if song_matches:
+                        selected_guide_song = st.selectbox(
+                            "楽曲の候補",
+                            song_matches,
+                            key="classification_guide_song",
+                        )
+                        song_classes = unique_in_registered_order(
+                            df.loc[df["楽曲名"] == selected_guide_song, "楽曲区分"].fillna("未分類").tolist()
+                        )
+                        st.success(f"🎵 「{selected_guide_song}」は、このサイトでは「{'・'.join(song_classes)}」です。")
+                with result_col2:
+                    if event_matches and event_name_col and event_type_col:
+                        selected_guide_event = st.selectbox(
+                            "公演の候補",
+                            event_matches,
+                            key="classification_guide_event",
+                        )
+                        event_classes = unique_in_registered_order(
+                            event_df.loc[event_df[event_name_col] == selected_guide_event, event_type_col].fillna("未設定").tolist()
+                        )
+                        st.success(f"🏟️ 「{selected_guide_event}」は、このサイトでは「{'・'.join(event_classes)}」です。")
+
             st.subheader("🏟️ 公演区分")
             st.dataframe(
                 pd.DataFrame(
