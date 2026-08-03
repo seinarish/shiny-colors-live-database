@@ -375,6 +375,25 @@ def _learn_order_constraints(history: pd.DataFrame, columns: list[str]) -> list[
         if "開始" in values and "当落" in values:
             constraints.add((values["開始"], values["当落"], 0))
 
+    # 「一般会員先行」と「一般販売（二次抽選）」は同じ公演で並んだ履歴が少なくても、
+    # 二次抽選の開始が一般会員先行の終了（当落があれば当落）より前にはならない。
+    member_columns = [
+        column for column in columns
+        if "一般会員先行" in _short_label(column) and "ティーン割" not in _short_label(column)
+    ]
+    secondary_columns = [
+        column for column in columns
+        if ("一般販売" in _short_label(column) or "一般発売" in _short_label(column))
+        and ("二次" in _short_label(column) or "2次" in _short_label(column))
+        and "抽選" in _short_label(column)
+    ]
+    member_last = next((column for column in member_columns if "当落" in _short_label(column)), None)
+    if member_last is None:
+        member_last = next((column for column in member_columns if "終了" in _short_label(column)), None)
+    secondary_start = next((column for column in secondary_columns if "開始" in _short_label(column)), None)
+    if member_last and secondary_start:
+        constraints.add((member_last, secondary_start, 0))
+
     ticket_columns = [
         column
         for column in columns
