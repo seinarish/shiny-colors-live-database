@@ -2654,6 +2654,21 @@ if os.path.exists(SETLIST_FILE):
     else:
         df["楽曲区分"] = "未分類"
 
+    # 個人名義の出演は「外部」公演の中でも別扱いにし、通常のライブ記録には
+    # 含めない。現状は衣装欄に個人アーティスト活動として登録された記録を対象にする。
+    individual_artist_mask = (
+        df["公演区分"].astype(str).eq("外部")
+        & df.get("衣装", pd.Series("", index=df.index)).astype(str).str.contains("個人アーティスト", na=False)
+    )
+    include_individual_artist_activity = st.sidebar.checkbox(
+        "🎙️ 個人アーティストとしての歌唱を含める",
+        value=False,
+        key="include_individual_artist_activity",
+        help="キャストが個人名義のアーティストとして歌唱した、シャイニーカラーズ楽曲の記録を含めます。",
+    )
+    if not include_individual_artist_activity:
+        df = df.loc[~individual_artist_mask].copy()
+
     # サイドバーフィルター適用前の全履歴（前回披露日の計算に使用）
     full_analysis_df = df.copy()
 
