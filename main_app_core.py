@@ -97,6 +97,7 @@ if PUBLIC_MODE:
         <style>
         [data-testid="stToolbar"],
         [data-testid="stToolbarActions"],
+        [data-testid="stHeaderActionElements"],
         [data-testid="stAppDeployButton"] {
             display: none !important;
         }
