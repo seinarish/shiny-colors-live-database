@@ -6198,6 +6198,7 @@ if os.path.exists(SETLIST_FILE):
             st.write(
                 "できるだけ確認して登録していますが、表記ゆれや記録漏れが残っているかもしれません。公式発表・公式サイトの情報を優先して、ひとつの参考として楽しんでもらえたらうれしいです。"
             )
+            st.caption("記録の誤りや抜けに気づいたときは、[X（@seinarish）](https://x.com/seinarish) まで知らせてもらえると助かります。")
 
     if not PUBLIC_MODE:
         with tab13:
