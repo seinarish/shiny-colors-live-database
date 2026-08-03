@@ -3593,6 +3593,18 @@ if os.path.exists(SETLIST_FILE):
             if person_unit:
                 person_groups.add(person_unit)
 
+            # ソロ衣装はユニット名ではなくアイドル名で登録されているため、
+            # キャスト／アイドルのどちらを選んでも本人の衣装だけを判定できるようにする。
+            person_costume_targets = {selected_person}
+            if selected_person in cast_to_idol_map:
+                person_costume_targets.add(cast_to_idol_map[selected_person])
+            if selected_person in idol_to_cast_map:
+                person_costume_targets.update(
+                    s.strip()
+                    for s in re.split(r"[;；]", idol_to_cast_map[selected_person])
+                    if s.strip()
+                )
+
             def find_person_costume(row, c_list):
                 # 5.5th Anniversary LIVE is a special case: the costume is
                 # determined by the member's unit, even for all-member songs.
@@ -3604,10 +3616,21 @@ if os.path.exists(SETLIST_FILE):
                             return override_costume
 
                 if len(c_list) == 1:
-                    return c_list[0]
+                    only_costume_target = costume_to_unit_map.get(c_list[0])
+                    if (
+                        only_costume_target in person_groups
+                        or only_costume_target in person_costume_targets
+                        or only_costume_target == "シャイニーカラーズ"
+                    ):
+                        return c_list[0]
+                    return None
 
                 for c_item in c_list:
-                    if costume_to_unit_map.get(c_item) in person_groups:
+                    costume_target = costume_to_unit_map.get(c_item)
+                    if (
+                        costume_target in person_groups
+                        or costume_target in person_costume_targets
+                    ):
                         return c_item
 
                 for c_item in c_list:
@@ -3720,7 +3743,9 @@ if os.path.exists(SETLIST_FILE):
                     if matched_c:
                         assigned_costume_by_index[row_index] = [matched_c]
                     else:
-                        assigned_costume_by_index[row_index] = c_list
+                        # 本人との対応を確認できない衣装は、誤った着用記録として
+                        # 表示しない。衣装名が並んだだけの公演データもここで除外する。
+                        assigned_costume_by_index[row_index] = []
 
                 person_costumes = [
                     costume
