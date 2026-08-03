@@ -925,6 +925,13 @@ st.markdown(
             width: auto !important;
             min-width: min(100%, 16rem) !important;
         }
+        div[data-testid="stHorizontalBlock"]:has([data-testid="stButton"]) {
+            flex-wrap: wrap !important;
+        }
+        div[data-testid="stHorizontalBlock"]:has([data-testid="stButton"]) > [data-testid="column"] {
+            flex: 1 1 6.5rem !important;
+            min-width: 6.5rem !important;
+        }
     }
     @media (max-width: 520px) {
         .shiny-title {
@@ -3066,30 +3073,51 @@ if os.path.exists(SETLIST_FILE):
         st.session_state.selected_tab1_cats &= set(available_cats)
         filter_year_col, filter_category_col = st.columns(2)
         with filter_year_col:
-            selected_tab1_year_values = st.multiselect(
-                "📅 開催年",
-                available_years,
-                default=[
-                    year for year in available_years
-                    if year in st.session_state.selected_tab1_years
-                ],
-                format_func=lambda year: f"{year}年",
-                key="tab1_year_multiselect",
-            )
-            st.session_state.selected_tab1_years = set(selected_tab1_year_values)
+            st.caption("📅 開催年")
+            year_actions = st.columns(2)
+            if year_actions[0].button("すべて選択", key="tab1_select_all_years", use_container_width=True):
+                st.session_state.selected_tab1_years = set(available_years)
+                st.rerun()
+            if year_actions[1].button("すべて解除", key="tab1_clear_years", use_container_width=True):
+                st.session_state.selected_tab1_years = set()
+                st.rerun()
+            year_buttons = st.columns(5)
+            for index, year in enumerate(available_years):
+                is_selected = year in st.session_state.selected_tab1_years
+                if year_buttons[index % len(year_buttons)].button(
+                    f"{year}年",
+                    key=f"tab1_year_button_{year}",
+                    type="primary" if is_selected else "secondary",
+                    use_container_width=True,
+                ):
+                    if is_selected:
+                        st.session_state.selected_tab1_years.discard(year)
+                    else:
+                        st.session_state.selected_tab1_years.add(year)
+                    st.rerun()
         with filter_category_col:
-            selected_tab1_category_values = st.multiselect(
-                "🏷️ 公演区分",
-                available_cats,
-                default=[
-                    category for category in available_cats
-                    if category in st.session_state.selected_tab1_cats
-                ],
-                key="tab1_category_multiselect",
-            )
-            st.session_state.selected_tab1_cats = set(
-                selected_tab1_category_values
-            )
+            st.caption("🏷️ 公演区分")
+            category_actions = st.columns(2)
+            if category_actions[0].button("すべて選択", key="tab1_select_all_categories", use_container_width=True):
+                st.session_state.selected_tab1_cats = set(available_cats)
+                st.rerun()
+            if category_actions[1].button("すべて解除", key="tab1_clear_categories", use_container_width=True):
+                st.session_state.selected_tab1_cats = set()
+                st.rerun()
+            category_buttons = st.columns(3)
+            for index, category in enumerate(available_cats):
+                is_selected = category in st.session_state.selected_tab1_cats
+                if category_buttons[index % len(category_buttons)].button(
+                    str(category),
+                    key=f"tab1_category_button_{category}",
+                    type="primary" if is_selected else "secondary",
+                    use_container_width=True,
+                ):
+                    if is_selected:
+                        st.session_state.selected_tab1_cats.discard(category)
+                    else:
+                        st.session_state.selected_tab1_cats.add(category)
+                    st.rerun()
 
         filtered_live_df = df[
             (df["開催年"].isin(st.session_state.selected_tab1_years)) & 
