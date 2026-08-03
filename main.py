@@ -7,7 +7,8 @@ _CORE_FILE = _APP_DIR / "main_app_core.py"
 # 公開リポジトリでは、Streamlit の起動ファイルに main.py を指定しても公開モードにする。
 APP_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "public")).casefold()
 
-from schedule_prediction import render_schedule_prediction
+if APP_MODE != "public":
+    from schedule_prediction import render_schedule_prediction
 
 exec(
     compile(_CORE_FILE.read_text(encoding="utf-8-sig"), str(_CORE_FILE), "exec"),

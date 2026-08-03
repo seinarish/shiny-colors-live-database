@@ -2271,7 +2271,7 @@ if os.path.exists(SETLIST_FILE):
 
     # 公式生配信・番組履歴（任意の補助データ）
     broadcast_df = pd.DataFrame()
-    if os.path.exists(BROADCAST_FILE):
+    if not PUBLIC_MODE and os.path.exists(BROADCAST_FILE):
         broadcast_df = load_normalized_csv(BROADCAST_FILE)
         if "初回放送" in broadcast_df.columns:
             broadcast_df["初回放送_dt"] = pd.to_datetime(
@@ -2281,7 +2281,7 @@ if os.path.exists(SETLIST_FILE):
 
     # カード実装履歴（任意の補助データ）
     card_df = pd.DataFrame()
-    if os.path.exists(CARD_FILE):
+    if not PUBLIC_MODE and os.path.exists(CARD_FILE):
         card_df = load_normalized_csv(CARD_FILE)
         if "実装日" in card_df.columns:
             card_df["実装日_dt"] = pd.to_datetime(card_df["実装日"], errors="coerce")
@@ -2290,30 +2290,31 @@ if os.path.exists(SETLIST_FILE):
 
     # オーディオコメンタリー担当（横持ちCSVをキャスト×公演の行データへ変換）
     commentary_rows = []
-    for commentary_file, commentary_type in [
-        (COMMENTARY_BD_FILE, "Blu-ray版"),
-        (COMMENTARY_STREAM_FILE, "配信版"),
-    ]:
-        if os.path.exists(commentary_file):
-            raw_commentary_df = load_csv(commentary_file).fillna("")
-            for commentary_row in raw_commentary_df.to_dict("records"):
-                row_values = list(commentary_row.values())
-                if not row_values:
-                    continue
-                commentary_cast = clean_text(str(row_values[0]))
-                for shorthand_event in row_values[1:]:
-                    shorthand_event = clean_text(str(shorthand_event))
-                    if commentary_cast and shorthand_event and shorthand_event != "nan":
-                        commentary_rows.append({
-                            "キャスト": commentary_cast,
-                            "公演略称": shorthand_event,
-                            "種別": commentary_type,
-                        })
+    if not PUBLIC_MODE:
+        for commentary_file, commentary_type in [
+            (COMMENTARY_BD_FILE, "Blu-ray版"),
+            (COMMENTARY_STREAM_FILE, "配信版"),
+        ]:
+            if os.path.exists(commentary_file):
+                raw_commentary_df = load_csv(commentary_file).fillna("")
+                for commentary_row in raw_commentary_df.to_dict("records"):
+                    row_values = list(commentary_row.values())
+                    if not row_values:
+                        continue
+                    commentary_cast = clean_text(str(row_values[0]))
+                    for shorthand_event in row_values[1:]:
+                        shorthand_event = clean_text(str(shorthand_event))
+                        if commentary_cast and shorthand_event and shorthand_event != "nan":
+                            commentary_rows.append({
+                                "キャスト": commentary_cast,
+                                "公演略称": shorthand_event,
+                                "種別": commentary_type,
+                            })
     commentary_df = pd.DataFrame(commentary_rows)
 
     # シャニラジ出演履歴（キャストごとの横持ち回番号一覧を行データへ変換）
     radio_rows = []
-    if os.path.exists(RADIO_APPEARANCE_FILE):
+    if not PUBLIC_MODE and os.path.exists(RADIO_APPEARANCE_FILE):
         raw_radio_df = load_csv(RADIO_APPEARANCE_FILE).fillna("")
         radio_cast_aliases = {"菅沼千沙": "菅沼千紗"}
         for radio_row in raw_radio_df.to_dict("records"):
@@ -2329,7 +2330,7 @@ if os.path.exists(SETLIST_FILE):
 
     # シャニラジ各回の放送日・内容。フルサイズの重複行（#で始まる行）は読み飛ばす。
     radio_episode_rows = []
-    if os.path.exists(RADIO_EPISODE_FILE):
+    if not PUBLIC_MODE and os.path.exists(RADIO_EPISODE_FILE):
         with open(RADIO_EPISODE_FILE, encoding="utf-8", newline="") as radio_episode_file:
             for row in csv.reader(radio_episode_file, delimiter="\t"):
                 if len(row) < 3:
@@ -2342,7 +2343,9 @@ if os.path.exists(SETLIST_FILE):
                     "放送内容": clean_text(row[1]),
                     "初回放送": clean_text(row[2]),
                 })
-    radio_episode_df = pd.DataFrame(radio_episode_rows).drop_duplicates("出演回")
+    radio_episode_df = pd.DataFrame(radio_episode_rows)
+    if not radio_episode_df.empty:
+        radio_episode_df = radio_episode_df.drop_duplicates("出演回")
     if not radio_episode_df.empty:
         radio_episode_df["初回放送_dt"] = pd.to_datetime(
             radio_episode_df["初回放送"].astype(str).str.replace(r"\([^)]*\)", "", regex=True),
@@ -2352,18 +2355,18 @@ if os.path.exists(SETLIST_FILE):
     radio_clip_df = load_optional_media_csv(
         YOUTUBE_RADIO_CLIP_FILE,
         ["出演回", "YouTube_URL"],
-    )
+    ) if not PUBLIC_MODE else pd.DataFrame()
     if not radio_clip_df.empty:
         radio_clip_df["出演回"] = radio_clip_df["出演回"].map(normalize_radio_episode)
 
     youtube_unit_pv_df = load_optional_media_csv(
         YOUTUBE_UNIT_PV_FILE,
         ["対象", "区分", "YouTube_URL"],
-    )
+    ) if not PUBLIC_MODE else pd.DataFrame()
     youtube_anniversary_pv_df = load_optional_media_csv(
         YOUTUBE_ANNIVERSARY_PV_FILE,
         ["周年", "種別", "YouTube_URL"],
-    )
+    ) if not PUBLIC_MODE else pd.DataFrame()
 
     # 公式YouTubeリンクは任意の補助データ。未配置時も分析機能は通常どおり動作する。
     youtube_audio_draft_df = load_optional_media_csv(
@@ -2409,7 +2412,7 @@ if os.path.exists(SETLIST_FILE):
     price_history_df = load_optional_media_csv(
         PRICE_HISTORY_FILE,
         ["対象名", "カテゴリ", "価格種別", "価格", "日付"],
-    )
+    ) if not PUBLIC_MODE else pd.DataFrame()
 
     if "日付" in df.columns:
         df["日付_dt"] = pd.to_datetime(df["日付"], errors="coerce")
