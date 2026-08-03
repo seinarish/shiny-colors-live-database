@@ -3042,8 +3042,8 @@ if os.path.exists(SETLIST_FILE):
                 aggregated_rank = aggregated_rank.sort_values(by="経過日数_num", ascending=False)
 
             display_rank = aggregated_rank[[rank_target, count_col_name, "最終披露日", "前回からの経過"]].reset_index(drop=True)
-            # スマホでは曲名（または衣装・ユニット名）を先頭にし、順位を次に表示する。
-            display_rank.insert(1, "順位", range(1, len(display_rank) + 1))
+            # 一覧では順位を最初に置くと、縦に追って比較しやすい。
+            display_rank.insert(0, "順位", range(1, len(display_rank) + 1))
             
             # 1〜3位の行を強調表示するハイライト関数
             def highlight_top3_rows(row):
