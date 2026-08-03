@@ -2408,7 +2408,7 @@ if os.path.exists(SETLIST_FILE):
     event_social_links_df = load_optional_media_csv(
         EVENT_SOCIAL_LINKS_FILE,
         ["対象公演", "種別", "URL"],
-    )
+    ) if not PUBLIC_MODE else pd.DataFrame()
     price_history_df = load_optional_media_csv(
         PRICE_HISTORY_FILE,
         ["対象名", "カテゴリ", "価格種別", "価格", "日付"],
@@ -5222,7 +5222,7 @@ if os.path.exists(SETLIST_FILE):
                     selected_event,
                     event_social_links_df,
                 )
-                if event_social_links:
+                if event_social_links and not PUBLIC_MODE:
                     st.caption("🎨 公式告知・ビジュアル")
                     social_columns = st.columns(min(4, len(event_social_links)))
                     for social_index, social_link in enumerate(event_social_links):
