@@ -394,6 +394,57 @@ def _enforce_order_constraints(
     return result
 
 
+def _apply_ticket_phase_spacing(
+    result: pd.DataFrame,
+    history: pd.DataFrame,
+    known_dates: dict[str, pd.Timestamp],
+) -> pd.DataFrame:
+    """同じ先行内の開始・終了・当落の間隔を、過去の密集値でそろえる。"""
+    if result.empty:
+        return result
+
+    actions = ("開始", "終了", "当落")
+    grouped: dict[str, dict[str, tuple[int, str]]] = {}
+    for index, row in result.iterrows():
+        column = str(row["_column"])
+        label = _short_label(column)
+        action = next((value for value in actions if value in label), None)
+        if action is None:
+            continue
+        base = re.sub(r"(開始|終了|当落)", "", label)
+        base = re.sub(r"[\s　・／/（）()\[\]【】]+", "", base)
+        grouped.setdefault(base, {})[action] = (index, column)
+
+    result = result.copy()
+    for phase_columns in grouped.values():
+        if "開始" not in phase_columns:
+            continue
+        start_index, start_column = phase_columns["開始"]
+        start_date = pd.Timestamp(result.at[start_index, "予想日"])
+        for action in ("終了", "当落"):
+            if action not in phase_columns:
+                continue
+            target_index, target_column = phase_columns[action]
+            if target_column in known_dates:
+                continue
+            start_history = history[start_column].map(_parse_date)
+            target_history = history[target_column].map(_parse_date)
+            gaps = (target_history - start_history).dropna().dt.days
+            gaps = gaps[gaps >= 0]
+            if len(gaps) < 3:
+                continue
+            dense_gaps = _densest_offsets(gaps)
+            if dense_gaps.empty:
+                continue
+            gap_days = int(round(dense_gaps.median()))
+            gap_error = max(3, int((dense_gaps - dense_gaps.median()).abs().quantile(0.80)))
+            result.at[target_index, "予想日"] = (start_date + pd.Timedelta(days=gap_days)).date()
+            result.at[target_index, "目安の範囲"] = f"±{gap_error}日"
+            result.at[target_index, "採用基準"] = "同一先行の開始日からの間隔"
+            result.at[target_index, "期間による補正"] = f"開始から過去の中心値 +{gap_days}日"
+    return result
+
+
 def _prediction_row(
     history: pd.DataFrame,
     column: str,
@@ -485,6 +536,23 @@ def _prediction_row(
     if not candidates:
         return None
 
+    # 発表直後に十分な履歴が集中する項目は、類似条件で絞った少数の長期公演より優先する。
+    global_announcement_offsets = (
+        history[column].map(_parse_date) - history[_ANNOUNCEMENT].map(_parse_date)
+    ).dropna().dt.days
+    early_announcement_offsets = global_announcement_offsets[
+        global_announcement_offsets.between(-3, 14)
+    ]
+    announcement_near = (
+        len(early_announcement_offsets) >= 3
+        and len(early_announcement_offsets) >= len(global_announcement_offsets) * 0.4
+    )
+    if announcement_near:
+        announcement_offsets = early_announcement_offsets
+    elif len(announcement_offsets) >= 3:
+        near_spread = float((announcement_offsets - announcement_offsets.median()).abs().quantile(0.80))
+        announcement_near = abs(float(announcement_offsets.median())) <= 7 and near_spread <= 7
+
     lead_model_summary = ""
     if sequence_candidates:
         total_score = sum(candidate[0] for candidate in sequence_candidates)
@@ -495,7 +563,7 @@ def _prediction_row(
         spread = max(7, int((selected_offsets - selected_offsets.median()).abs().quantile(0.80)))
         correlation_sources = "・".join(_short_label(candidate[1].removesuffix("からの連鎖")) for candidate in sequence_candidates)
         lead_model_summary = f"{correlation_sources}との日程差を学習"
-    elif lead_model is not None:
+    elif lead_model is not None and not announcement_near:
         predicted, residuals, slope, r_squared, sample_count, lead_min, lead_max = lead_model
         selected_basis = "発表〜DAY1の期間を学習"
         selected_offsets = residuals
@@ -507,16 +575,24 @@ def _prediction_row(
         outlier_risk = "高" if outside_range or learned_error > 45 else "中" if learned_error > 25 else "低"
         risk_detail = f"{outlier_risk}（過去90%誤差 ±{learned_error:.0f}日" + ("／期間が学習範囲外" if outside_range else "") + "）"
     else:
-        _, selected_basis, predicted, selected_offsets = max(candidates, key=lambda item: item[0])
-        predicted = pd.Timestamp(predicted)
+        if announcement_near and announcement is not None:
+            selected_basis = "発表日基準"
+            predicted = announcement + pd.Timedelta(days=float(announcement_offsets.median()))
+            selected_offsets = announcement_offsets
+        else:
+            _, selected_basis, predicted, selected_offsets = max(candidates, key=lambda item: item[0])
+            predicted = pd.Timestamp(predicted)
         spread = max(7, int((selected_offsets - selected_offsets.median()).abs().quantile(0.80)))
 
-    if lead_model is None or sequence_candidates:
+    if lead_model is None or sequence_candidates or announcement_near:
         learned_error = float((selected_offsets - selected_offsets.median()).abs().quantile(0.90))
         outlier_risk = "高" if learned_error > 45 else "中" if learned_error > 25 else "低"
         risk_detail = f"{outlier_risk}（過去90%誤差 ±{learned_error:.0f}日）"
 
-    predicted, weekday_note = _weekday_adjustment(predicted, dates)
+    if announcement_near:
+        weekday_note = ""
+    else:
+        predicted, weekday_note = _weekday_adjustment(predicted, dates)
     today_note = ""
     # 未確定の予定は、基準日（通常は今日）より前には置かない。
     # 入力済みの確定日程は関数の冒頭で返しているため、この補正の対象外。
@@ -772,6 +848,7 @@ def render_schedule_prediction() -> None:
         st.info("入力日から予想できる項目がありません。")
         return
 
+    result = _apply_ticket_phase_spacing(result, prediction_history, known_dates)
     order_constraints = _learn_order_constraints(prediction_history, list(dict.fromkeys(selected_columns)))
     result = _enforce_order_constraints(result, order_constraints)
     result = result.sort_values("予想日", kind="stable")
