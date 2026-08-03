@@ -39,19 +39,45 @@ def _clean_public_table_text(data):
     return display_data
 
 
-if PUBLIC_MODE:
-    # 元データや集計用の区切り文字は保持し、公開画面の表だけを整形する。
-    _original_dataframe = st.dataframe
-    _original_table = st.table
+def _adaptive_table_column_config(data, current_config=None):
+    """短い値の列だけをコンパクトにし、長文列は必要以上に広げない。"""
+    table_data = getattr(data, "data", data)
+    if not isinstance(table_data, pd.DataFrame):
+        return current_config
 
-    def _public_dataframe(data, *args, **kwargs):
-        return _original_dataframe(_clean_public_table_text(data), *args, **kwargs)
+    config = dict(current_config or {})
+    for column in table_data.columns:
+        values = table_data[column].dropna().astype(str).head(300)
+        max_chars = max([len(str(column))] + [len(value) for value in values], default=len(str(column)))
+        desired_width = "small" if max_chars <= 8 else "medium"
 
-    def _public_table(data, *args, **kwargs):
-        return _original_table(_clean_public_table_text(data), *args, **kwargs)
+        # すでに書式指定された短い列も、余白だけが大きくならないよう細くする。
+        if max_chars <= 8 or column not in config:
+            config[column] = st.column_config.Column(str(column), width=desired_width)
+    return config
 
-    st.dataframe = _public_dataframe
-    st.table = _public_table
+
+# 元データや集計用の区切り文字は保持し、公開画面の表だけを整形する。
+_original_dataframe = st.dataframe
+_original_table = st.table
+
+
+def _responsive_dataframe(data, *args, **kwargs):
+    display_data = _clean_public_table_text(data) if PUBLIC_MODE else data
+    kwargs["column_config"] = _adaptive_table_column_config(
+        display_data,
+        kwargs.get("column_config"),
+    )
+    return _original_dataframe(display_data, *args, **kwargs)
+
+
+def _responsive_table(data, *args, **kwargs):
+    display_data = _clean_public_table_text(data) if PUBLIC_MODE else data
+    return _original_table(display_data, *args, **kwargs)
+
+
+st.dataframe = _responsive_dataframe
+st.table = _responsive_table
 
 # ------------------------------------------
 # 1. ページ初期設定＆シャニマス公式風（クリスタル＆虹色グラデーション）CSS
