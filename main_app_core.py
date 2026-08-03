@@ -3435,10 +3435,20 @@ if os.path.exists(SETLIST_FILE):
                 if sel_series != "すべて" and series_col:
                     filtered_alb_df = filtered_alb_df[filtered_alb_df[series_col] == sel_series]
                 album_list += unique_in_registered_order(filtered_alb_df[alb_col].tolist())
+            if (
+                not song_album_df.empty
+                and song_alb_col
+                and "アルバム未収録" in song_album_df[song_alb_col].astype(str).tolist()
+                and "アルバム未収録" not in album_list
+            ):
+                album_list.append("アルバム未収録")
             sel_album = st.selectbox("2. アルバムを選択:", album_list, key="tab2_sel_album")
 
         with sc3:
-            all_songs = unique_in_registered_order(analysis_base_df["集計用楽曲名"].tolist())
+            all_song_values = analysis_base_df["集計用楽曲名"].tolist()
+            if not song_album_df.empty and "楽曲名" in song_album_df.columns:
+                all_song_values += song_album_df["楽曲名"].dropna().astype(str).tolist()
+            all_songs = unique_in_registered_order(all_song_values)
             filtered_songs = []
 
             if not song_album_df.empty and "楽曲名" in song_album_df.columns and song_alb_col:
