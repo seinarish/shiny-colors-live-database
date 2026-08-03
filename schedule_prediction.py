@@ -394,6 +394,29 @@ def _learn_order_constraints(history: pd.DataFrame, columns: list[str]) -> list[
     if member_last and secondary_start:
         constraints.add((member_last, secondary_start, 0))
 
+    # 一般会員先行と一般発売（抽選）の同時期データは少ないが、確認できる2件では
+    # 一般発売の開始が一般会員先行の当落より後だったため、その順番を維持する。
+    primary_lottery_start = next(
+        (
+            column
+            for column in columns
+            if ("一般販売" in _short_label(column) or "一般発売" in _short_label(column))
+            and "抽選" in _short_label(column)
+            and "開始" in _short_label(column)
+            and "二次" not in _short_label(column)
+            and "2次" not in _short_label(column)
+            and "見切れ" not in _short_label(column)
+        ),
+        None,
+    )
+    if member_last and primary_lottery_start:
+        member_to_lottery = (
+            history[primary_lottery_start].map(_parse_date) - history[member_last].map(_parse_date)
+        ).dropna().dt.days
+        member_to_lottery = member_to_lottery[member_to_lottery >= 0]
+        if len(member_to_lottery) >= 2:
+            constraints.add((member_last, primary_lottery_start, int(member_to_lottery.min())))
+
     # 一般発売の一次抽選を選んだ場合、二次抽選の開始は一次の終了後にする。
     # 一次と二次が同じ履歴行で埋まっていないことが多いため、名称からも順序を補う。
     primary_lottery_columns = [
