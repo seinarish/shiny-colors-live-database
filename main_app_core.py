@@ -3129,19 +3129,54 @@ if os.path.exists(SETLIST_FILE):
                 return [''] * len(row)
 
             st.markdown("### 📋 ランキング詳細一覧")
-            # 横にカードを並べると順位ごとの比較が難しいため、順位を縦に追える表にする。
-            st.dataframe(
-                display_rank.style.apply(highlight_top3_rows, axis=1),
-                use_container_width=True,
-                hide_index=True,
-                height=min(720, 74 + len(display_rank) * 38),
-                column_config={
-                    rank_target: st.column_config.TextColumn(rank_target, width="large"),
-                    "順位": st.column_config.NumberColumn("順位", width="small"),
-                    count_col_name: st.column_config.NumberColumn(count_col_name, width="small"),
-                    "最終披露日": st.column_config.TextColumn("最終披露日", width="medium"),
-                    "前回からの経過": st.column_config.TextColumn("前回からの経過", width="medium"),
-                },
+            st.markdown(
+                """
+                <style>
+                .ranking-table-wrap { max-height: 720px; overflow: auto; border: 1px solid rgba(102,87,217,.22); border-radius: 14px; background: rgba(255,255,255,.92); }
+                .ranking-table { width: 100%; border-collapse: collapse; color: #29274f; table-layout: fixed; }
+                .ranking-table th { position: sticky; top: 0; z-index: 1; background: #f7f5ff; border-bottom: 2px solid #4a4674; font-weight: 800; text-align: left; }
+                .ranking-table th, .ranking-table td { padding: .62rem .72rem; border-bottom: 1px solid rgba(72,65,131,.13); vertical-align: middle; overflow-wrap: anywhere; }
+                .ranking-table .rank-col { width: 4.2rem; text-align: center; font-weight: 800; }
+                .ranking-table .count-col { width: 6.5rem; text-align: right; font-weight: 800; }
+                .ranking-table .date-col { width: 7.8rem; }
+                .ranking-table .elapsed-col { width: 12rem; }
+                .ranking-table tr.rank-1 td { background: #fff3cd; }
+                .ranking-table tr.rank-2 td { background: #e2e3e5; }
+                .ranking-table tr.rank-3 td { background: #f8d7da; }
+                @media (max-width: 700px) {
+                    .ranking-table-wrap { max-height: 66vh; overflow-x: hidden; }
+                    .ranking-table th, .ranking-table td { padding: .56rem .48rem; font-size: .9rem; }
+                    .ranking-table .rank-col { width: 2.8rem; }
+                    .ranking-table .count-col { width: 4.5rem; }
+                    .ranking-table .date-col, .ranking-table .elapsed-col { display: none; }
+                }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+            ranking_rows = []
+            for _, ranking_row in display_rank.iterrows():
+                rank_number = int(ranking_row["順位"])
+                row_class = f"rank-{rank_number}" if rank_number in {1, 2, 3} else ""
+                ranking_rows.append(
+                    "<tr class='{row_class}'><td class='rank-col'>{rank}</td><td>{name}</td>"
+                    "<td class='count-col'>{count}</td><td class='date-col'>{last_date}</td>"
+                    "<td class='elapsed-col'>{elapsed}</td></tr>".format(
+                        row_class=row_class,
+                        rank=rank_number,
+                        name=html.escape(str(ranking_row[rank_target])),
+                        count=html.escape(str(ranking_row[count_col_name])),
+                        last_date=html.escape(str(ranking_row["最終披露日"])),
+                        elapsed=html.escape(str(ranking_row["前回からの経過"])),
+                    )
+                )
+            st.markdown(
+                "<div class='ranking-table-wrap'><table class='ranking-table'><thead><tr>"
+                f"<th class='rank-col'>順位</th><th>{html.escape(rank_target)}</th>"
+                f"<th class='count-col'>{html.escape(count_col_name)}</th>"
+                "<th class='date-col'>最終披露日</th><th class='elapsed-col'>前回からの経過</th>"
+                "</tr></thead><tbody>" + "".join(ranking_rows) + "</tbody></table></div>",
+                unsafe_allow_html=True,
             )
         else:
             st.info("該当するデータがありません。")
