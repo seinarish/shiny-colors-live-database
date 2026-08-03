@@ -3561,7 +3561,7 @@ if os.path.exists(SETLIST_FILE):
                         st.image(selected_jacket_path, use_container_width=True)
             with album_info_col:
                 if selected_album:
-                    st.subheader("💿 収録アルバム")
+                    st.subheader("💿 収録情報" if selected_album == "アルバム未収録" else "💿 収録アルバム")
                     st.markdown(f"**{selected_album}**")
                     if series_col and not album_master_df.empty and alb_col:
                         album_master_keys = (
