@@ -90,6 +90,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed" if PUBLIC_MODE else "auto"
 )
 
+if PUBLIC_MODE:
+    # 公開版ではStreamlit標準の右上メニューを出さず、閲覧画面に専念させる。
+    st.markdown(
+        """
+        <style>
+        [data-testid="stToolbar"],
+        [data-testid="stToolbarActions"],
+        [data-testid="stAppDeployButton"] {
+            display: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
 # 公式Shiny Colors風のビジュアル ＆ 全域テキスト自動折り返し＆明るいテーマ固定CSS
 st.markdown(
     """
