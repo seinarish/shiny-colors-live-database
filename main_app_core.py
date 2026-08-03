@@ -1953,6 +1953,9 @@ def render_compact_youtube(url, title="公式YouTube", compact=True):
 # ------------------------------------------
 if os.path.exists(SETLIST_FILE):
     df = load_normalized_csv(SETLIST_FILE)
+    if PUBLIC_MODE and "楽曲名" in df.columns:
+        # 公開版では、セットリストではないトークのみの記録を全タブから除外する。
+        df = df[~df["楽曲名"].astype(str).str.contains("トークのみ", na=False)].copy()
 
     live_col_name = next(
         (
@@ -2579,11 +2582,14 @@ if os.path.exists(SETLIST_FILE):
         key="include_no_vocal"
     )
 
-    exclude_talk_events = st.sidebar.checkbox(
-        "💬 『トークのみ』等のイベントを楽曲集計から除外する",
-        value=True,
-        key="exclude_talk_events"
-    )
+    if PUBLIC_MODE:
+        exclude_talk_events = True
+    else:
+        exclude_talk_events = st.sidebar.checkbox(
+            "💬 『トークのみ』等のイベントを楽曲集計から除外する",
+            value=True,
+            key="exclude_talk_events"
+        )
 
     df["原曲名"] = df["楽曲名"].apply(lambda x: get_base_song_name(x, include_versions=True, include_no_vocal=True))
     df["バージョン"] = df["楽曲名"].apply(get_version_tag)
