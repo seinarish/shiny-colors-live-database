@@ -60,7 +60,8 @@ st.set_page_config(
     page_title="SHINY COLORS LIVE DATABASE", 
     page_icon="✨", 
     layout="wide",
-    initial_sidebar_state="auto"
+    # 公開版はまずコンテンツを見せ、絞り込み設定は必要なときだけ開けるようにする。
+    initial_sidebar_state="collapsed" if PUBLIC_MODE else "auto"
 )
 
 # 公式Shiny Colors風のビジュアル ＆ 全域テキスト自動折り返し＆明るいテーマ固定CSS
@@ -6197,7 +6198,6 @@ if os.path.exists(SETLIST_FILE):
                 """
                 - このサイトはファンが作成した非公式の記録サイトであり、株式会社バンダイナムコエンターテインメントおよび関係各社とは関係ありません。
                 - 作品名・登場人物名などに関する権利は、それぞれの権利者に帰属します。
-                - 画像、歌詞本文、音源ファイルは掲載していません。動画は公式YouTubeへのリンクまたは公式YouTubeの埋め込みのみを案内します。
                 """
             )
 
