@@ -5415,6 +5415,19 @@ if os.path.exists(SETLIST_FILE):
             attendance_clean_df["_event_date"] = pd.to_datetime(
                 attendance_clean_df["_event_date"], errors="coerce"
             )
+            # 斑鳩ルカ（川口莉奈）は 5.5th Anniversary LIVE からコメティックへ加入。
+            # それ以前の参加履歴は、現在の所属ではなく「ソロ」と表示する。
+            def attendance_unit_at_event(row):
+                cast_name = str(row.get("キャスト", ""))
+                event_date = row.get("_event_date")
+                if cast_name in {"川口莉奈", "斑鳩ルカ"} and pd.notna(event_date):
+                    if event_date < pd.Timestamp("2023-10-21"):
+                        return "ソロ"
+                return idol_to_unit_map.get(cast_name, "その他")
+
+            attendance_clean_df["所属ユニット"] = attendance_clean_df.apply(
+                attendance_unit_at_event, axis=1
+            )
             attendance_clean_df["_event_group"] = attendance_clean_df["公演名"].map(attendance_event_key)
             attendance_clean_df["_day_order"] = attendance_clean_df["日程"].map(attendance_day_order)
             attendance_clean_df = attendance_clean_df.sort_values(
