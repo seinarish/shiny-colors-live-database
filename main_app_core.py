@@ -6030,21 +6030,6 @@ if os.path.exists(SETLIST_FILE):
                 hide_index=True,
             )
 
-            st.subheader("📈 価格推移の公演分類")
-            st.caption("価格推移の一部グラフでは、比較用にさらに大まかな分類を使っています。")
-            st.dataframe(
-                pd.DataFrame(
-                    [
-                        ["周年ライブ", "名称から周年ライブと判断できる公演"],
-                        ["シャニソンライブ", "シャニソン関連として扱う公演"],
-                        ["その他", "上記以外の公演"],
-                    ],
-                    columns=["分類", "このサイトでの扱い"],
-                ),
-                use_container_width=True,
-                hide_index=True,
-            )
-
     if PUBLIC_MODE:
         with tab17:
             render_page_header(
