@@ -2576,7 +2576,7 @@ if os.path.exists(SETLIST_FILE):
     )
 
     include_no_vocal = st.sidebar.checkbox(
-        "🔇 歌唱なし (Off Vocal / 歌唱無し) を同一曲として合算する",
+        "🔇 歌唱なしを同一曲として合算する",
         value=False,
         key="include_no_vocal"
     )
