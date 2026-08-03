@@ -5236,6 +5236,11 @@ if os.path.exists(SETLIST_FILE):
                     selected_event,
                     youtube_live_digest_df,
                     youtube_xr_intro_df,
+                )
+                ap_stream_options = build_event_media_options(
+                    selected_event,
+                    pd.DataFrame(),
+                    pd.DataFrame(),
                     youtube_live_ap_stream_df,
                 )
                 if event_media_options:
@@ -5258,6 +5263,27 @@ if os.path.exists(SETLIST_FILE):
                         )
                         st.caption(f"{selected_event_media['種別']}｜公式YouTubeの埋め込みです。")
                         st.link_button("YouTubeで開く", selected_event_media["URL"])
+
+                if ap_stream_options:
+                    st.subheader("📡 AP生配信")
+                    if st.checkbox(
+                        "AP生配信を表示する",
+                        key=f"tab8_show_ap_stream_{make_search_key(selected_event)}",
+                    ):
+                        selected_ap_stream_index = st.selectbox(
+                            "視聴するAP生配信を選択:",
+                            range(len(ap_stream_options)),
+                            format_func=lambda index: ap_stream_options[index]["表示"],
+                            key=f"tab8_ap_stream_{make_search_key(selected_event)}",
+                        )
+                        selected_ap_stream = ap_stream_options[selected_ap_stream_index]
+                        render_compact_youtube(
+                            selected_ap_stream["URL"],
+                            selected_ap_stream["表示"],
+                            compact=False,
+                        )
+                        st.caption("AP生配信｜公式YouTubeの埋め込みです。")
+                        st.link_button("YouTubeで開く", selected_ap_stream["URL"])
 
                 series_col = (
                     next((c for c in album_master_df.columns if "シリーズ" in c), None)
