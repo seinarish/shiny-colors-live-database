@@ -2785,7 +2785,7 @@ if os.path.exists(SETLIST_FILE):
 
     df = df[
         df["公演区分フィルター"].apply(
-            lambda categories: bool(set(categories) & st.session_state.selected_event_types)
+            lambda categories: set(categories).issubset(st.session_state.selected_event_types)
         )
     ]
 
