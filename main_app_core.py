@@ -3083,16 +3083,22 @@ if os.path.exists(SETLIST_FILE):
 
             display_rank = aggregated_rank[[rank_target, count_col_name, "最終披露日", "前回からの経過"]].reset_index(drop=True)
             # 一覧では順位を最初に置くと、縦に追って比較しやすい。
-            display_rank.insert(0, "順位", range(1, len(display_rank) + 1))
+            rank_value_col = count_col_name if rank_order in {"多い順", "少ない順"} else "前回からの経過_num"
+            rank_ascending = rank_order == "少ない順"
+            display_rank.insert(
+                0,
+                "順位",
+                aggregated_rank[rank_value_col].rank(method="min", ascending=rank_ascending).astype(int).to_list(),
+            )
             
             # 1〜3位の行を強調表示するハイライト関数
             def highlight_top3_rows(row):
-                idx = row.name
-                if idx == 0:
+                rank_number = int(row["順位"])
+                if rank_number == 1:
                     return ['background-color: #FFF3CD; color: #856404; font-weight: bold;'] * len(row)
-                elif idx == 1:
+                elif rank_number == 2:
                     return ['background-color: #E2E3E5; color: #383D41; font-weight: bold;'] * len(row)
-                elif idx == 2:
+                elif rank_number == 3:
                     return ['background-color: #F8D7DA; color: #721C24; font-weight: bold;'] * len(row)
                 return [''] * len(row)
 
