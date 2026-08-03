@@ -394,6 +394,24 @@ def _learn_order_constraints(history: pd.DataFrame, columns: list[str]) -> list[
     if member_last and secondary_start:
         constraints.add((member_last, secondary_start, 0))
 
+    # 一般発売の一次抽選を選んだ場合、二次抽選の開始は一次の終了後にする。
+    # 一次と二次が同じ履歴行で埋まっていないことが多いため、名称からも順序を補う。
+    primary_lottery_columns = [
+        column for column in columns
+        if ("一般販売" in _short_label(column) or "一般発売" in _short_label(column))
+        and "抽選" in _short_label(column)
+        and "二次" not in _short_label(column)
+        and "2次" not in _short_label(column)
+        and "SPラウンジ" not in _short_label(column)
+        and "バルコニー" not in _short_label(column)
+        and "見切れ" not in _short_label(column)
+    ]
+    primary_last = next((column for column in primary_lottery_columns if "当落" in _short_label(column)), None)
+    if primary_last is None:
+        primary_last = next((column for column in primary_lottery_columns if "終了" in _short_label(column)), None)
+    if primary_last and secondary_start:
+        constraints.add((primary_last, secondary_start, 0))
+
     ticket_columns = [
         column
         for column in columns
@@ -447,6 +465,36 @@ def _enforce_order_constraints(
     return result
 
 
+def _typical_ticket_phase_gaps(history: pd.DataFrame, target_action: str) -> pd.Series:
+    """Use comparable ticket phases when one ticket type has too little history."""
+    source_action = {"終了": "開始", "当落": "終了"}.get(target_action)
+    if source_action is None:
+        return pd.Series(dtype="int64")
+    actions = ("開始", "終了", "当落")
+    grouped: dict[str, dict[str, str]] = {}
+    for column in _schedule_columns(history):
+        label = _short_label(column)
+        if not any(keyword in label for keyword in _TICKET_KEYWORDS):
+            continue
+        action = next((value for value in actions if value in label), None)
+        if action is None:
+            continue
+        base = re.sub(r"(開始|終了|当落)", "", label)
+        base = re.sub(r"[\s　・／/（）()\[\]【】]+", "", base)
+        grouped.setdefault(base, {})[action] = column
+
+    gaps: list[int] = []
+    for phase_columns in grouped.values():
+        if source_action not in phase_columns or target_action not in phase_columns:
+            continue
+        delta = (
+            history[phase_columns[target_action]].map(_parse_date)
+            - history[phase_columns[source_action]].map(_parse_date)
+        ).dropna().dt.days
+        gaps.extend(int(value) for value in delta if value >= 0)
+    return _densest_offsets(pd.Series(gaps, dtype="int64")) if gaps else pd.Series(dtype="int64")
+
+
 def _apply_ticket_phase_spacing(
     result: pd.DataFrame,
     history: pd.DataFrame,
@@ -484,9 +532,7 @@ def _apply_ticket_phase_spacing(
             target_history = history[target_column].map(_parse_date)
             gaps = (target_history - start_history).dropna().dt.days
             gaps = gaps[gaps >= 0]
-            if len(gaps) < 3:
-                continue
-            dense_gaps = _densest_offsets(gaps)
+            dense_gaps = _densest_offsets(gaps) if len(gaps) >= 3 else _typical_ticket_phase_gaps(history, action)
             if dense_gaps.empty:
                 continue
             gap_days = int(round(dense_gaps.median()))
