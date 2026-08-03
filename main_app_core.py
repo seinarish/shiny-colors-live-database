@@ -2045,6 +2045,22 @@ if os.path.exists(SETLIST_FILE):
     else:
         df["公演区分"] = "未設定"
 
+    if "公演区分" not in df.columns:
+        df["公演区分"] = "未設定"
+
+    # 公演は複数の区分に属する場合があるため、表示用の区分と絞り込み用の区分を分ける。
+    # events.csv では複数区分を「XR|合同」のように | で記載する。
+    def split_event_categories(value):
+        categories = [
+            category.strip()
+            for category in re.split(r"[|｜]", str(value))
+            if category.strip()
+        ]
+        return categories or ["未設定"]
+
+    df["公演区分フィルター"] = df["公演区分"].apply(split_event_categories)
+    df["公演区分"] = df["公演区分フィルター"].apply("・".join)
+
     idol_df = pd.DataFrame()
     cast_list = []
     idol_list = []
@@ -2716,7 +2732,13 @@ if os.path.exists(SETLIST_FILE):
 
     # 公演区分フィルター
     st.sidebar.subheader("🏟️ 公演区分フィルター")
-    all_event_types = unique_in_registered_order(df["公演区分"].tolist())
+    all_event_types = unique_in_registered_order(
+        [
+            category
+            for categories in df["公演区分フィルター"]
+            for category in categories
+        ]
+    )
 
     if "selected_event_types" not in st.session_state:
         st.session_state.selected_event_types = set(all_event_types)
@@ -2761,7 +2783,11 @@ if os.path.exists(SETLIST_FILE):
                 st.session_state.selected_event_types.add(etype)
             st.rerun()
 
-    df = df[df["公演区分"].isin(st.session_state.selected_event_types)]
+    df = df[
+        df["公演区分フィルター"].apply(
+            lambda categories: bool(set(categories) & st.session_state.selected_event_types)
+        )
+    ]
 
     st.sidebar.markdown("---")
 
