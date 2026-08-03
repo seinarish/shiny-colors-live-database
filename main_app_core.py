@@ -3034,22 +3034,19 @@ if os.path.exists(SETLIST_FILE):
                 return [''] * len(row)
 
             st.markdown("### 📋 ランキング詳細一覧")
-            ranking_cards = []
-            for _, rank_row in display_rank.iterrows():
-                rank_number = int(rank_row["順位"])
-                ranking_cards.append(
-                    f"<article class='ranking-card ranking-card--{min(rank_number, 4)}'>"
-                    f"<div class='ranking-card-title'><span class='ranking-card-rank'>{rank_number}</span>"
-                    f"<strong>{html.escape(str(rank_row[rank_target]))}</strong></div>"
-                    f"<dl class='ranking-card-meta'>"
-                    f"<div><dt>{html.escape(str(count_col_name))}</dt><dd>{html.escape(str(rank_row[count_col_name]))}</dd></div>"
-                    f"<div><dt>最終披露日</dt><dd>{html.escape(str(rank_row['最終披露日']))}</dd></div>"
-                    f"<div><dt>前回からの経過</dt><dd>{html.escape(str(rank_row['前回からの経過']))}</dd></div>"
-                    f"</dl></article>"
-                )
-            st.markdown(
-                "<div class='ranking-card-list'>" + "".join(ranking_cards) + "</div>",
-                unsafe_allow_html=True,
+            # 横にカードを並べると順位ごとの比較が難しいため、順位を縦に追える表にする。
+            st.dataframe(
+                display_rank.style.apply(highlight_top3_rows, axis=1),
+                use_container_width=True,
+                hide_index=True,
+                height=min(720, 74 + len(display_rank) * 38),
+                column_config={
+                    rank_target: st.column_config.TextColumn(rank_target, width="large"),
+                    "順位": st.column_config.NumberColumn("順位", width="small"),
+                    count_col_name: st.column_config.NumberColumn(count_col_name, width="small"),
+                    "最終披露日": st.column_config.TextColumn("最終披露日", width="medium"),
+                    "前回からの経過": st.column_config.TextColumn("前回からの経過", width="medium"),
+                },
             )
         else:
             st.info("該当するデータがありません。")
@@ -5446,6 +5443,20 @@ if os.path.exists(SETLIST_FILE):
                             visible_statuses.append(status_name)
                 if visible_statuses:
                     event_attendance = event_attendance[event_attendance["参加状況"].isin(visible_statuses)]
+                # pivot_table は標準ではユニット名を五十音順に並べるため、
+                # アイドルマスターに登録された順番を明示的に使う。
+                registered_unit_order = unique_in_registered_order(
+                    [idol_to_unit_map.get(cast_name, "その他") for cast_name in cast_list]
+                )
+                if "その他" not in registered_unit_order:
+                    registered_unit_order.append("その他")
+                unit_sort_order = {unit_name: index for index, unit_name in enumerate(registered_unit_order)}
+                cast_sort_order = {cast_name: index for index, cast_name in enumerate(cast_list)}
+                event_attendance["_unit_sort"] = event_attendance["所属ユニット"].map(unit_sort_order).fillna(len(unit_sort_order))
+                event_attendance["_cast_sort"] = event_attendance["キャスト"].map(cast_sort_order).fillna(len(cast_sort_order))
+                event_attendance = event_attendance.sort_values(
+                    ["_unit_sort", "_cast_sort", "_day_order"], kind="stable"
+                )
                 st.subheader("🏟️ 公演ごとの出演状況")
                 day_order = unique_in_registered_order(event_attendance["日程"].astype(str).tolist())
                 if day_order:
@@ -5455,6 +5466,7 @@ if os.path.exists(SETLIST_FILE):
                         values="参加状況",
                         aggfunc="first",
                         fill_value="",
+                        sort=False,
                     ).reindex(columns=day_order, fill_value="").reset_index()
                     st.caption("DAYごとに横並びで確認できます。")
                     st.dataframe(
@@ -6163,8 +6175,10 @@ if os.path.exists(SETLIST_FILE):
             with st.expander("データの見方・注意"):
                 st.markdown(
                     """
+                    - このサイトはファンが作成した非公式の記録サイトです。株式会社バンダイナムコエンターテインメントおよび関係各社とは関係ありません。<br>
                     - 集計は登録済みの公演・セットリストをもとにしています。<br>
                     - このサイトには、シャイニーカラーズのキャストまたはアイドルが歌唱した記録を登録しています。合同ライブなどで他ブランドのキャスト・アイドルだけがシャイニーカラーズ楽曲をカバーした記録は、集計対象に含めていません。<br>
+                    - 画像・歌詞本文・音源ファイルは掲載していません。動画は公式YouTubeへのリンクまたは公式YouTubeの埋め込みのみを案内します。<br>
                     - 表記ゆれはできるだけまとめていますが、内容に誤りがあれば参考程度にご覧ください。<br>
                     - 公演・楽曲の分類は、このサイトで比較しやすくするための独自分類です。
                     """
