@@ -3138,6 +3138,7 @@ if os.path.exists(SETLIST_FILE):
                 .ranking-table th, .ranking-table td { padding: .62rem .72rem; border-bottom: 1px solid rgba(72,65,131,.13); vertical-align: middle; overflow-wrap: anywhere; }
                 .ranking-table .rank-col { width: 4.2rem; text-align: center; font-weight: 800; }
                 .ranking-table .count-col { width: 6.5rem; text-align: right; font-weight: 800; }
+                .ranking-table .mobile-metric-col { display: none; }
                 .ranking-table .date-col { width: 7.8rem; }
                 .ranking-table .elapsed-col { width: 12rem; }
                 .ranking-table tr.rank-1 td { background: #fff3cd; }
@@ -3147,7 +3148,8 @@ if os.path.exists(SETLIST_FILE):
                     .ranking-table-wrap { max-height: 66vh; overflow-x: hidden; }
                     .ranking-table th, .ranking-table td { padding: .56rem .48rem; font-size: .9rem; }
                     .ranking-table .rank-col { width: 2.8rem; }
-                    .ranking-table .count-col { width: 4.5rem; }
+                    .ranking-table .count-col { display: none; }
+                    .ranking-table .mobile-metric-col { display: table-cell; width: 5.8rem; text-align: right; font-weight: 800; }
                     .ranking-table .date-col, .ranking-table .elapsed-col { display: none; }
                 }
                 </style>
@@ -3155,17 +3157,20 @@ if os.path.exists(SETLIST_FILE):
                 unsafe_allow_html=True,
             )
             ranking_rows = []
+            mobile_metric_label = count_col_name if rank_order in {"多い順", "少ない順"} else "前回からの経過"
             for _, ranking_row in display_rank.iterrows():
                 rank_number = int(ranking_row["順位"])
                 row_class = f"rank-{rank_number}" if rank_number in {1, 2, 3} else ""
+                mobile_metric = ranking_row[count_col_name] if rank_order in {"多い順", "少ない順"} else ranking_row["前回からの経過"]
                 ranking_rows.append(
                     "<tr class='{row_class}'><td class='rank-col'>{rank}</td><td>{name}</td>"
-                    "<td class='count-col'>{count}</td><td class='date-col'>{last_date}</td>"
+                    "<td class='count-col'>{count}</td><td class='mobile-metric-col'>{mobile_metric}</td><td class='date-col'>{last_date}</td>"
                     "<td class='elapsed-col'>{elapsed}</td></tr>".format(
                         row_class=row_class,
                         rank=rank_number,
                         name=html.escape(str(ranking_row[rank_target])),
                         count=html.escape(str(ranking_row[count_col_name])),
+                        mobile_metric=html.escape(str(mobile_metric)),
                         last_date=html.escape(str(ranking_row["最終披露日"])),
                         elapsed=html.escape(str(ranking_row["前回からの経過"])),
                     )
@@ -3173,7 +3178,7 @@ if os.path.exists(SETLIST_FILE):
             st.markdown(
                 "<div class='ranking-table-wrap'><table class='ranking-table'><thead><tr>"
                 f"<th class='rank-col'>順位</th><th>{html.escape(rank_target)}</th>"
-                f"<th class='count-col'>{html.escape(count_col_name)}</th>"
+                f"<th class='count-col'>{html.escape(count_col_name)}</th><th class='mobile-metric-col'>{html.escape(mobile_metric_label)}</th>"
                 "<th class='date-col'>最終披露日</th><th class='elapsed-col'>前回からの経過</th>"
                 "</tr></thead><tbody>" + "".join(ranking_rows) + "</tbody></table></div>",
                 unsafe_allow_html=True,
