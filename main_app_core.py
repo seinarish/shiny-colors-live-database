@@ -5319,35 +5319,65 @@ if os.path.exists(SETLIST_FILE):
             def attendance_event_key(value):
                 """公演名の引用符・記号・全半角の違いを無視して照合する。"""
                 value = clean_live_name(str(value)).lower()
+                # 公演マスター側に付いている DAY1 / DAY2 は、公演そのものを
+                # 判定する際には無視する（出演履歴では別列「日程」で管理している）。
+                value = re.sub(r"\bday\s*[0-9０-９]+\b", "", value, flags=re.IGNORECASE)
                 return re.sub(r"[^\w]", "", value, flags=re.UNICODE)
+
+            def attendance_day_order(value):
+                """同一公演内では DAY1 → DAY2 の順に必ず並べる。"""
+                match = re.search(r"day\s*([0-9０-９]+)", str(value), flags=re.IGNORECASE)
+                if match:
+                    return int(match.group(1).translate(str.maketrans("０１２３４５６７８９", "0123456789")))
+                return 999
 
             # CSVの追加順ではなく、公演マスターの開催日で一貫して並べる
             attendance_clean_df["_event_date"] = pd.NaT
+            event_date_sources = []
             if 'event_df' in locals() and not event_df.empty:
                 event_date_col = next((c for c in event_df.columns if "日付" in c), None)
                 event_title_col = next((c for c in event_df.columns if "公演" in c or "イベント" in c or "ライブ" in c), None)
                 if event_date_col and event_title_col:
-                    event_sort_df = event_df[[event_date_col, event_title_col]].dropna().copy()
-                    event_sort_df["_event_date"] = pd.to_datetime(event_sort_df[event_date_col], errors="coerce")
-                    event_sort_df = event_sort_df.dropna(subset=["_event_date"])
-                    event_dates = {}
-                    for attendance_event in attendance_clean_df["公演名"].dropna().unique():
-                        attendance_key = attendance_event_key(attendance_event)
-                        matched_dates = event_sort_df[
-                            event_sort_df[event_title_col].apply(
-                                lambda title: attendance_key in attendance_event_key(title)
-                                or attendance_event_key(title) in attendance_key
-                            )
-                        ]["_event_date"]
-                        if not matched_dates.empty:
-                            event_dates[attendance_event] = matched_dates.min()
-                    attendance_clean_df["_event_date"] = attendance_clean_df["公演名"].map(event_dates)
+                    event_date_sources.append(
+                        event_df[[event_date_col, event_title_col]].rename(
+                            columns={event_date_col: "_event_date", event_title_col: "_event_title"}
+                        )
+                    )
+            # 公演マスターに表記違いがある場合でも、セットリストの実施日を予備の
+            # 開催日として使う。これで DAY1 / DAY2 が別公演に挟まらない。
+            if live_col_name and "日付_dt" in df.columns:
+                event_date_sources.append(
+                    df[["日付_dt", live_col_name]].rename(
+                        columns={"日付_dt": "_event_date", live_col_name: "_event_title"}
+                    )
+                )
+            if event_date_sources:
+                event_sort_df = pd.concat(event_date_sources, ignore_index=True).dropna().copy()
+                event_sort_df["_event_date"] = pd.to_datetime(event_sort_df["_event_date"], errors="coerce")
+                event_sort_df = event_sort_df.dropna(subset=["_event_date"])
+                event_sort_df["_event_key"] = event_sort_df["_event_title"].map(attendance_event_key)
+                event_dates = {}
+                for attendance_event in attendance_clean_df["公演名"].dropna().unique():
+                    attendance_key = attendance_event_key(attendance_event)
+                    exact_dates = event_sort_df.loc[
+                        event_sort_df["_event_key"] == attendance_key, "_event_date"
+                    ]
+                    matched_dates = exact_dates if not exact_dates.empty else event_sort_df.loc[
+                        event_sort_df["_event_key"].apply(
+                            lambda key: attendance_key in key or key in attendance_key
+                        ), "_event_date"
+                    ]
+                    if not matched_dates.empty:
+                        event_dates[attendance_event] = matched_dates.min()
+                attendance_clean_df["_event_date"] = attendance_clean_df["公演名"].map(event_dates)
 
             attendance_clean_df["_event_date"] = pd.to_datetime(
                 attendance_clean_df["_event_date"], errors="coerce"
             )
+            attendance_clean_df["_event_group"] = attendance_clean_df["公演名"].map(attendance_event_key)
+            attendance_clean_df["_day_order"] = attendance_clean_df["日程"].map(attendance_day_order)
             attendance_clean_df = attendance_clean_df.sort_values(
-                ["_event_date", "公演名", "日程"], na_position="last"
+                ["_event_date", "_event_group", "_day_order"], na_position="last"
             )
             attendance_casts = unique_in_registered_order(attendance_clean_df["キャスト"].tolist())
             attendance_events = unique_in_registered_order(attendance_clean_df["公演名"].tolist())
@@ -5364,7 +5394,9 @@ if os.path.exists(SETLIST_FILE):
                 )
                 cast_attendance = attendance_clean_df[
                     attendance_clean_df["キャスト"] == selected_attendance_cast
-                ].copy().sort_values(["_event_date", "日程"], na_position="last")
+                ].copy().sort_values(
+                    ["_event_date", "_event_group", "_day_order"], na_position="last"
+                )
                 count_cols = st.columns(3)
                 count_cols[0].metric("参加", int((cast_attendance["参加状況"] == "参加").sum()))
                 count_cols[1].metric("一部参加", int((cast_attendance["参加状況"] == "一部楽曲参加").sum()))
