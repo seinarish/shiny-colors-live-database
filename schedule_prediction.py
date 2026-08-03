@@ -73,6 +73,31 @@ def _event_series(value: object) -> str:
     return ""
 
 
+def _tour_group_key(value: object) -> str:
+    """Return a shared key for tour stops while keeping non-tour events empty."""
+    text = _clean_text(value).upper()
+    if "TOUR" not in text:
+        return ""
+    text = re.sub(r"\s*(?:/|／)\s*.*$", "", text)
+    text = re.sub(
+        r"\s+(?:FIRST|SECOND|THIRD|FOURTH|FINAL)\s+(?:QUADRANT|PHASE|LEG)\b.*$",
+        "",
+        text,
+    )
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _is_tour_event(value: object) -> bool:
+    return bool(_tour_group_key(value))
+
+
+def _tour_show_counts(history: pd.DataFrame) -> pd.Series:
+    """Estimate each tour's number of recorded stops from its event names."""
+    keys = history[_EVENT_NAME].map(_tour_group_key)
+    counts = keys[keys.ne("")].value_counts()
+    return keys.map(counts).fillna(0).astype("int64")
+
+
 def _venue_scale(value: object) -> str:
     """会場名から、厳密な収容人数ではなく大まかな規模だけを分類する。"""
     venue = str(value).upper()
@@ -125,6 +150,8 @@ def _similar_configuration_history(
     event_series: str = "",
     venue_scale: str = "",
     season: str = "",
+    is_tour: bool | None = None,
+    tour_show_count: int | None = None,
 ) -> tuple[pd.DataFrame, int]:
     """今回のチケット構成に近い履歴を優先して、販売順の変化を学習する。"""
     target_exists = history[target_column].map(_parse_date).notna()
@@ -138,6 +165,13 @@ def _similar_configuration_history(
             candidates = same_type
 
     distance = pd.Series(0, index=candidates.index, dtype="int64")
+    if is_tour is not None:
+        historical_is_tour = candidates[_EVENT_NAME].map(_is_tour_event)
+        # Tour status is a strong condition, but leave a little room when history is sparse.
+        distance += (historical_is_tour != is_tour).astype("int64") * 2
+        if is_tour and tour_show_count is not None:
+            recorded_show_counts = _tour_show_counts(history).reindex(candidates.index).fillna(0)
+            distance += (recorded_show_counts - int(tour_show_count)).abs().clip(upper=4).astype("int64")
     for label, selected in ticket_selection.items():
         columns = option_columns.get(label, [])
         if not columns:
@@ -456,6 +490,8 @@ def _prediction_row(
     event_series: str,
     venue_scale: str,
     season: str,
+    is_tour: bool | None,
+    tour_show_count: int | None,
     known_dates: dict[str, pd.Timestamp],
     as_of_date: pd.Timestamp | None,
 ) -> dict[str, object] | None:
@@ -484,6 +520,8 @@ def _prediction_row(
         event_series if use_context else "",
         venue_scale if use_context else "",
         season if use_context else "",
+        is_tour,
+        tour_show_count,
     )
     dates = learning_history[column].map(_parse_date)
     all_announcement_offsets = (dates - learning_history[_ANNOUNCEMENT].map(_parse_date)).dropna().dt.days
@@ -758,6 +796,29 @@ def render_schedule_prediction() -> None:
 
     selected_season = _season_from_date(event_day1)
 
+    tour_kind = st.radio(
+        "公演の形式",
+        ["通常公演", "ツアー"],
+        horizontal=True,
+        key="prediction_tour_kind",
+        help="ツアーを選ぶと、ツアーかどうかと公演数が近い過去の例を優先します。",
+    )
+    is_tour = tour_kind == "ツアー"
+    tour_show_count: int | None = None
+    if is_tour:
+        tour_show_count = int(
+            st.number_input(
+                "ツアーの公演数",
+                min_value=2,
+                max_value=30,
+                value=3,
+                step=1,
+                key="prediction_tour_show_count",
+                help="DAY1・DAY2の2日間は1公演として数えます。",
+            )
+        )
+        st.caption("公演数が近い過去ツアーを優先して、発表後の日程の進み方を予想します。")
+
     st.subheader("今回あるチケット種別")
     st.caption("当てはまるチケット種別だけをオンにしてください。グッズ・キービジュアルなどの予定は常に表示します。")
     option_columns = {
@@ -838,6 +899,8 @@ def render_schedule_prediction() -> None:
             selected_series,
             selected_venue_scale,
             selected_season,
+            is_tour,
+            tour_show_count,
             known_dates,
             as_of_date,
         )
