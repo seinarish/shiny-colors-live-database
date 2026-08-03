@@ -5441,7 +5441,10 @@ if os.path.exists(SETLIST_FILE):
                 count_cols = st.columns(3)
                 count_cols[0].metric("参加", int((cast_attendance["参加状況"] == "参加").sum()))
                 count_cols[1].metric("一部参加", int((cast_attendance["参加状況"] == "一部楽曲参加").sum()))
-                count_cols[2].metric("欠席", int((cast_attendance["参加状況"] == "欠席").sum()))
+                count_cols[2].metric(
+                    "欠席（急遽不参加を含む）",
+                    int(cast_attendance["参加状況"].isin(["欠席", "急遽不参加"]).sum()),
+                )
 
                 cast_history_columns = [
                     col for col in ["公演名", "日程", "所属ユニット", "参加状況", "追加参加決定日", "補足"]
