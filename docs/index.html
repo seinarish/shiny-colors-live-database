@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>SHINY COLORS LIVE DATABASE</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      color: #35335e;
+      background:
+        radial-gradient(circle at 10% 10%, #edf7ff 0, transparent 30%),
+        radial-gradient(circle at 90% 20%, #fff0f8 0, transparent 30%),
+        linear-gradient(135deg, #ffffff, #f7f5ff);
+      min-height: 100vh;
+    }
+
+    header {
+      text-align: center;
+      padding: 36px 16px 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 5vw, 2.6rem);
+      background: linear-gradient(
+        90deg,
+        #6556cf,
+        #4ca9d5,
+        #df82ad
+      );
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: #77739d;
+    }
+
+    main {
+      width: min(1200px, calc(100% - 24px));
+      margin: auto;
+      padding-bottom: 60px;
+    }
+
+    .panel {
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #ddd8f5;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 8px 28px rgba(65, 55, 120, 0.08);
+      margin-bottom: 18px;
+    }
+
+    .filters {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    input, select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid #ccc7e8;
+      border-radius: 10px;
+      padding: 9px 12px;
+      background: white;
+      color: #343253;
+      font-size: 16px;
+    }
+
+    .status {
+      margin: 10px 0 0;
+      color: #706c94;
+      font-size: 0.9rem;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 850px;
+    }
+
+    th {
+      text-align: left;
+      padding: 11px;
+      border-bottom: 2px solid #d9d5ef;
+      background: #f7f5ff;
+      white-space: nowrap;
+    }
+
+    td {
+      padding: 10px 11px;
+      border-bottom: 1px solid #ece9f5;
+      vertical-align: top;
+    }
+
+    tr:hover td {
+      background: #faf9ff;
+    }
+
+    .unit {
+      display: inline-block;
+      background: #eeebff;
+      color: #5e51bc;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+    }
+
+    .error {
+      color: #b42848;
+      font-weight: bold;
+    }
+
+    @media (max-width: 720px) {
+      .filters {
+        grid-template-columns: 1fr;
+      }
+
+      header {
+        padding-top: 24px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>✨ SHINY COLORS LIVE DATABASE ✨</h1>
+  <div class="subtitle">
+    アイドルマスター シャイニーカラーズ ライブデータベース
+  </div>
+</header>
+
+<main>
+
+  <section class="panel">
+    <div class="filters">
+
+      <input
+        id="search"
+        type="search"
+        placeholder="楽曲名・公演名・歌唱者を検索"
+      >
+
+      <select id="unit">
+        <option value="">すべてのユニット</option>
+      </select>
+
+      <select id="year">
+        <option value="">すべての年</option>
+      </select>
+
+    </div>
+
+    <div id="status" class="status">
+      データを読み込んでいます…
+    </div>
+  </section>
+
+  <section class="panel table-wrap">
+
+    <table>
+
+      <thead>
+        <tr>
+          <th>日付</th>
+          <th>公演名</th>
+          <th>曲順</th>
+          <th>楽曲名</th>
+          <th>ユニット</th>
+          <th>歌唱者</th>
+          <th>衣装</th>
+        </tr>
+      </thead>
+
+      <tbody id="rows"></tbody>
+
+    </table>
+
+  </section>
+
+</main>
+
+<script>
+
+let allSongs = [];
+
+const searchBox = document.getElementById("search");
+const unitSelect = document.getElementById("unit");
+const yearSelect = document.getElementById("year");
+const rowsElement = document.getElementById("rows");
+const statusElement = document.getElementById("status");
+
+
+function parseCSV(text) {
+
+  const rows = [];
+  let row = [];
+  let value = "";
+  let quoted = false;
+
+  for (let i = 0; i < text.length; i++) {
+
+    const char = text[i];
+
+    if (char === '"') {
+
+      if (quoted && text[i + 1] === '"') {
+        value += '"';
+        i++;
+      } else {
+        quoted = !quoted;
+      }
+
+    } else if (char === "," && !quoted) {
+
+      row.push(value);
+      value = "";
+
+    } else if (
+      (char === "\n" || char === "\r") &&
+      !quoted
+    ) {
+
+      if (char === "\r" && text[i + 1] === "\n") {
+        i++;
+      }
+
+      row.push(value);
+      value = "";
+
+      if (row.some(cell => cell.trim() !== "")) {
+        rows.push(row);
+      }
+
+      row = [];
+
+    } else {
+
+      value += char;
+
+    }
+  }
+
+  if (value || row.length) {
+    row.push(value);
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+
+function escapeHTML(value) {
+
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+}
+
+
+function render() {
+
+  const keyword =
+    searchBox.value.trim().toLowerCase();
+
+  const selectedUnit =
+    unitSelect.value;
+
+  const selectedYear =
+    yearSelect.value;
+
+
+  const filtered = allSongs.filter(song => {
+
+    const searchTarget = [
+      song["楽曲名"],
+      song["公演名"],
+      song["歌唱者"],
+      song["ユニット"],
+      song["衣装"]
+    ]
+    .join(" ")
+    .toLowerCase();
+
+
+    const keywordOK =
+      !keyword ||
+      searchTarget.includes(keyword);
+
+
+    const unitOK =
+      !selectedUnit ||
+      song["ユニット"] === selectedUnit;
+
+
+    const year =
+      String(song["日付"] || "")
+      .slice(0, 4);
+
+
+    const yearOK =
+      !selectedYear ||
+      year === selectedYear;
+
+
+    return keywordOK && unitOK && yearOK;
+
+  });
+
+
+  statusElement.textContent =
+    `${filtered.length.toLocaleString()} 件表示 / ` +
+    `${allSongs.length.toLocaleString()} 件`;
+
+
+  const displayLimit = 1000;
+
+  rowsElement.innerHTML =
+    filtered
+      .slice(0, displayLimit)
+      .map(song => `
+
+        <tr>
+
+          <td>${escapeHTML(song["日付"])}</td>
+
+          <td>${escapeHTML(song["公演名"])}</td>
+
+          <td>${escapeHTML(song["曲順"])}</td>
+
+          <td>
+            <strong>
+              ${escapeHTML(song["楽曲名"])}
+            </strong>
+          </td>
+
+          <td>
+            <span class="unit">
+              ${escapeHTML(song["ユニット"])}
+            </span>
+          </td>
+
+          <td>${escapeHTML(song["歌唱者"])}</td>
+
+          <td>${escapeHTML(song["衣装"])}</td>
+
+        </tr>
+
+      `)
+      .join("");
+
+
+  if (filtered.length > displayLimit) {
+
+    statusElement.textContent +=
+      `（表は最初の ${displayLimit.toLocaleString()} 件まで表示）`;
+
+  }
+
+}
+
+
+async function loadSongs() {
+
+  try {
+
+    /*
+      index.html は docs/ の中、
+      songs.csv はリポジトリ直下なので ../songs.csv
+    */
+
+    const response =
+      await fetch("../songs.csv");
+
+
+    if (!response.ok) {
+
+      throw new Error(
+        `songs.csv を取得できませんでした (${response.status})`
+      );
+
+    }
+
+
+    const csvText =
+      await response.text();
+
+
+    const csvRows =
+      parseCSV(csvText);
+
+
+    const headers =
+      csvRows.shift()
+        .map(header =>
+          header.replace(/^\uFEFF/, "").trim()
+        );
+
+
+    allSongs =
+      csvRows.map(row => {
+
+        const item = {};
+
+        headers.forEach((header, index) => {
+          item[header] = row[index] ?? "";
+        });
+
+        return item;
+
+      });
+
+
+    const units =
+      [...new Set(
+        allSongs
+          .map(song => song["ユニット"])
+          .filter(Boolean)
+      )]
+      .sort();
+
+
+    units.forEach(unit => {
+
+      const option =
+        document.createElement("option");
+
+      option.value = unit;
+      option.textContent = unit;
+
+      unitSelect.appendChild(option);
+
+    });
+
+
+    const years =
+      [...new Set(
+        allSongs
+          .map(song =>
+            String(song["日付"] || "")
+              .slice(0, 4)
+          )
+          .filter(year =>
+            /^\d{4}$/.test(year)
+          )
+      )]
+      .sort((a, b) => b.localeCompare(a));
+
+
+    years.forEach(year => {
+
+      const option =
+        document.createElement("option");
+
+      option.value = year;
+      option.textContent = `${year}年`;
+
+      yearSelect.appendChild(option);
+
+    });
+
+
+    render();
+
+  } catch (error) {
+
+    console.error(error);
+
+    statusElement.innerHTML =
+      `<span class="error">
+        読み込みエラー：${escapeHTML(error.message)}
+      </span>`;
+
+  }
+
+}
+
+
+searchBox.addEventListener("input", render);
+unitSelect.addEventListener("change", render);
+yearSelect.addEventListener("change", render);
+
+loadSongs();
+
+</script>
+
+</body>
+</html>
