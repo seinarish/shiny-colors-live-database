@@ -9,6 +9,7 @@ import datetime
 import calendar
 import textwrap
 import shutil
+import html
 from datetime import datetime
 from functools import lru_cache
 import pandas as pd
@@ -1210,6 +1211,26 @@ def display_group_background(name):
     ):
         return f"linear-gradient(135deg, {primary} 0%, {primary} 48%, {accent} 52%, {accent} 100%)"
     return primary
+
+
+def render_unit_color_badges(unit_names):
+    """表のスタイル制限を避け、PJユニットの2色を確実に表示する。"""
+    badges = []
+    for unit_name in unique_in_registered_order([str(name) for name in unit_names if str(name).strip()]):
+        color = display_group_color(unit_name)
+        background = display_group_background(unit_name)
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            continue
+        red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
+        brightness = (red * 299 + green * 587 + blue * 114) / 1000
+        text_color = "#20243d" if brightness > 165 else "#ffffff"
+        badges.append(
+            '<span style="display:inline-block;margin:0 8px 8px 0;padding:5px 10px;'
+            f'border-radius:999px;background:{background};color:{text_color};font-weight:700;">'
+            f'{html.escape(unit_name)}</span>'
+        )
+    if badges:
+        st.markdown("<div style=\"margin:0.2rem 0 0.7rem;\">" + "".join(badges) + "</div>", unsafe_allow_html=True)
 
 
 def find_file(filename):
@@ -5758,6 +5779,7 @@ if os.path.exists(SETLIST_FILE):
                 ]
                 cast_history = cast_attendance[cast_history_columns].copy()
                 st.subheader(f"📅 {selected_attendance_cast}さんの参加履歴")
+                render_unit_color_badges(cast_history["所属ユニット"].tolist())
                 st.dataframe(
                     cast_history.style.map(
                         lambda value: f"background-color: {attendance_status_colors.get(value, '#ffffff')};"
@@ -5811,6 +5833,7 @@ if os.path.exists(SETLIST_FILE):
                     ["_unit_sort", "_cast_sort", "_day_order"], kind="stable"
                 )
                 st.subheader("🏟️ 公演ごとの出演状況")
+                render_unit_color_badges(event_attendance["所属ユニット"].tolist())
                 day_order = unique_in_registered_order(event_attendance["日程"].astype(str).tolist())
                 if day_order:
                     parallel_attendance = event_attendance.pivot_table(
