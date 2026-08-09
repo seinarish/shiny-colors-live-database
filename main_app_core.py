@@ -110,15 +110,6 @@ if PUBLIC_MODE:
         [data-testid="stAppDeployButton"] {
             display: none !important;
         }
-        /* 公開版のサイドバーは、迷わない閲覧用の案内だけを表示する。 */
-        [data-testid="stSidebar"] [data-testid="stCheckbox"],
-        [data-testid="stSidebar"] [data-testid="stButton"],
-        [data-testid="stSidebar"] [data-baseweb="select"],
-        [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] hr,
-        [data-testid="stSidebar"] .stCaption {
-            display: none !important;
-        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -2554,11 +2545,6 @@ if os.path.exists(SETLIST_FILE):
     # サイドバー設定
     # ------------------------------------------
     st.sidebar.header("⚙️ 集計・表示設定")
-    if PUBLIC_MODE:
-        st.sidebar.info(
-            "公開版はすべての公演区分・楽曲区分を表示しています。"
-            "曲名や公演名は、各ページの候補から選んで絞り込めます。"
-        )
     source_files = [
         file_path
         for file_path in [
@@ -2763,11 +2749,6 @@ if os.path.exists(SETLIST_FILE):
         key="include_no_vocal"
     )
 
-    if PUBLIC_MODE:
-        # 公開版は閲覧専用として固定ルールを使う。
-        unify_member_names = True
-        include_versions = True
-        include_no_vocal = False
 
     if PUBLIC_MODE:
         exclude_talk_events = True
@@ -2847,8 +2828,6 @@ if os.path.exists(SETLIST_FILE):
         key="include_individual_artist_activity",
         help="キャストが個人名義のアーティストとして歌唱した、シャイニーカラーズ楽曲の記録を含めます。",
     )
-    if PUBLIC_MODE:
-        include_individual_artist_activity = False
     if not include_individual_artist_activity:
         df = df.loc[~individual_artist_mask].copy()
 
@@ -2910,9 +2889,6 @@ if os.path.exists(SETLIST_FILE):
                 st.session_state.selected_event_types.add(etype)
             st.rerun()
 
-    if PUBLIC_MODE:
-        # 公開版は絞り込みを設けず、すべての公演区分を表示する。
-        st.session_state.selected_event_types = set(all_event_types)
 
     df = df[
         df["公演区分フィルター"].apply(
@@ -2967,9 +2943,6 @@ if os.path.exists(SETLIST_FILE):
                 st.session_state.selected_cat_types.add(ctype)
             st.rerun()
 
-    if PUBLIC_MODE:
-        # 公開版は絞り込みを設けず、すべての楽曲区分を表示する。
-        st.session_state.selected_cat_types = set(all_cat_types)
 
     df = df[df["楽曲区分"].isin(st.session_state.selected_cat_types)]
 
