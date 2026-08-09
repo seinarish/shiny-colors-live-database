@@ -96,7 +96,7 @@ st.set_page_config(
     page_icon="✨", 
     layout="wide",
     # 公開版はまずコンテンツを見せ、絞り込み設定は必要なときだけ開けるようにする。
-    initial_sidebar_state="expanded" if PUBLIC_MODE else "auto"
+    initial_sidebar_state="collapsed" if PUBLIC_MODE else "auto"
 )
 
 if PUBLIC_MODE:
@@ -109,6 +109,12 @@ if PUBLIC_MODE:
         [data-testid="stHeaderActionElements"],
         [data-testid="stAppDeployButton"] {
             display: none !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            z-index: 1000000 !important;
         }
         </style>
         """,
@@ -1529,6 +1535,24 @@ def unique_in_registered_order(values):
         seen.add(value)
         ordered_values.append(value)
     return ordered_values
+
+
+def render_filter_choice(label, options, key):
+    """公開スマホ版では、少数の絞り込みを検索入力なしのボタン式で出す。"""
+    options = list(options)
+    if not options:
+        return None
+    if PUBLIC_MODE:
+        selected = st.pills(
+            label,
+            options,
+            selection_mode="single",
+            default=options[0],
+            key=key,
+            width="stretch",
+        )
+        return selected if selected is not None else options[0]
+    return st.selectbox(label, options, key=key)
 
 
 @st.cache_data(show_spinner=False, max_entries=DERIVED_CACHE_MAX_ENTRIES)
@@ -3534,7 +3558,7 @@ if os.path.exists(SETLIST_FILE):
             series_list = ["すべて"]
             if series_col:
                 series_list += unique_in_registered_order(album_master_df[series_col].tolist())
-            sel_series = st.selectbox("1. シリーズを選択:", series_list, key="tab2_sel_series")
+            sel_series = render_filter_choice("1. シリーズを選択:", series_list, key="tab2_sel_series")
 
         with sc2:
             album_list = ["すべて"]
@@ -3550,7 +3574,7 @@ if os.path.exists(SETLIST_FILE):
                 and "アルバム未収録" not in album_list
             ):
                 album_list.append("アルバム未収録")
-            sel_album = st.selectbox("2. アルバムを選択:", album_list, key="tab2_sel_album")
+            sel_album = render_filter_choice("2. アルバムを選択:", album_list, key="tab2_sel_album")
 
         with sc3:
             all_song_values = analysis_base_df["集計用楽曲名"].tolist()
@@ -3631,7 +3655,12 @@ if os.path.exists(SETLIST_FILE):
                     final_song_list += echoes_versions
                     final_song_list = unique_in_registered_order(final_song_list)
 
-            selected_song = st.selectbox("3. 分析する楽曲を選択:", final_song_list, key="tab2_sel_song")
+            selected_song = st.selectbox(
+                "3. 分析する楽曲を選択（候補を検索できます）:",
+                final_song_list,
+                key="tab2_sel_song",
+                help="曲名を入力して候補を絞り込み、候補から選択します。",
+            )
 
         if selected_song:
             song_df = analysis_base_df[analysis_base_df["集計用楽曲名"] == selected_song].copy()
