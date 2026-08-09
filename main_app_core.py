@@ -25,6 +25,14 @@ from event_image_gallery import (
 
 PUBLIC_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "local")).casefold() == "public"
 
+# 公開版は小さなメモリ枠で動くため、使い終えた集計結果を早めに入れ替える。
+# ローカル版は編集作業の快適さを優先して従来どおり多めに保持する。
+FILE_CACHE_MAX_ENTRIES = 18 if PUBLIC_MODE else 96
+DERIVED_CACHE_MAX_ENTRIES = 12 if PUBLIC_MODE else 32
+LYRIC_CACHE_MAX_ENTRIES = 8 if PUBLIC_MODE else 16
+MEDIA_CACHE_MAX_ENTRIES = 32 if PUBLIC_MODE else 128
+SONG_MEDIA_CACHE_MAX_ENTRIES = 48 if PUBLIC_MODE else 256
+
 
 def _clean_public_table_text(data):
     """公開版の表だけ、データ内の区切り記号を読みやすく整える。"""
@@ -1271,7 +1279,7 @@ def make_search_key(text):
     return re.sub(r"\s+", "", text)
 
 
-@st.cache_data(show_spinner=False, max_entries=96)
+@st.cache_data(show_spinner=False, max_entries=FILE_CACHE_MAX_ENTRIES)
 def _load_csv_cached(absolute_path, file_signature):
     """更新時刻とサイズをキーにして、同じファイルの再読込を省く。"""
     load_error = None
@@ -1309,7 +1317,7 @@ def normalize_dataframe(dataframe, clean_column_names=True):
     return normalized
 
 
-@st.cache_data(show_spinner=False, max_entries=96)
+@st.cache_data(show_spinner=False, max_entries=FILE_CACHE_MAX_ENTRIES)
 def _load_normalized_csv_cached(absolute_path, file_signature):
     """読込後の文字列整形まで含めてキャッシュする。"""
     return normalize_dataframe(
@@ -1478,7 +1486,7 @@ def unique_in_registered_order(values):
     return ordered_values
 
 
-@st.cache_data(show_spinner=False, max_entries=32)
+@st.cache_data(show_spinner=False, max_entries=DERIVED_CACHE_MAX_ENTRIES)
 def build_song_series_map(song_album_df, album_master_df, song_album_col, album_name_col, series_col):
     """アルバム名の略称・正式名の違いを許容して、楽曲からシリーズを引ける辞書を作る。"""
     if any(frame.empty for frame in [song_album_df, album_master_df]):
@@ -1607,7 +1615,7 @@ def make_lyric_excerpt(lyrics, terms, radius=46):
     return ("…" if start else "") + text[start:end] + ("…" if end < len(text) else "")
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
+@st.cache_data(show_spinner=False, max_entries=LYRIC_CACHE_MAX_ENTRIES)
 def get_frequent_lyric_phrases(lyrics_series, limit=20):
     """助詞・語尾を除き、歌詞の内容に関わる語だけを簡易集計する。"""
     ignored_words = {
@@ -1784,7 +1792,7 @@ def load_optional_media_csv(file_path, columns):
         return pd.DataFrame(columns=columns)
 
 
-@st.cache_data(show_spinner=False, max_entries=256)
+@st.cache_data(show_spinner=False, max_entries=SONG_MEDIA_CACHE_MAX_ENTRIES)
 def build_song_media_options(
     song_name,
     audio_draft_df,
@@ -1867,7 +1875,7 @@ def build_song_media_options(
     return options
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def build_album_preview_options(album_name, album_preview_df):
     """選択中の収録アルバムに紐づく試聴動画だけを返す。"""
     if not album_name or album_preview_df is None or album_preview_df.empty:
@@ -1898,7 +1906,7 @@ def build_album_preview_options(album_name, album_preview_df):
     return options
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def build_event_media_options(event_name, live_digest_df, xr_intro_df, ap_stream_df=None):
     """公演名が日別表記でも、共通の公式映像を見つけられるようにする。"""
     selected_key = make_event_media_key(event_name)
@@ -1942,7 +1950,7 @@ def build_event_media_options(event_name, live_digest_df, xr_intro_df, ap_stream
     return options
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def find_event_social_links(event_name, social_links_df):
     """公演の日別表記を吸収し、公式告知・ビジュアルへのリンクを返す。"""
     if social_links_df.empty or not {"対象公演", "種別", "URL"}.issubset(social_links_df.columns):
@@ -1985,7 +1993,7 @@ def render_analysis_chart(fig, key=None, height=None):
     st.caption("グラフ右上のカメラボタンから、PNG画像として保存できます。")
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def find_event_official_site_urls(event_name, official_site_df):
     """DAY別の公演名から、共通の公式イベントページを見つける。"""
     if official_site_df.empty or not {"対象公演", "公式サイトURL"}.issubset(official_site_df.columns):
