@@ -5711,6 +5711,17 @@ if os.path.exists(SETLIST_FILE):
             for empty_col in ["追加参加決定日", "補足"]:
                 if empty_col in attendance_clean_df.columns:
                     attendance_clean_df[empty_col] = attendance_clean_df[empty_col].replace({"None": "", "nan": ""})
+            # 登録作業のためだけに付けた定型メモは、閲覧画面には出さない。
+            # 個別の事情を書いた補足はそのまま残す。
+            if "補足" in attendance_clean_df.columns:
+                hidden_attendance_notes = {
+                    "PDF参加履歴より登録",
+                    "トーク&ミニライブ・披露曲未発表",
+                    "画像の色＋元CSV",
+                }
+                attendance_clean_df["補足"] = attendance_clean_df["補足"].where(
+                    ~attendance_clean_df["補足"].astype(str).isin(hidden_attendance_notes), ""
+                )
 
             def attendance_event_key(value):
                 """公演名の引用符・記号・全半角の違いを無視して照合する。"""
