@@ -5620,7 +5620,10 @@ if os.path.exists(SETLIST_FILE):
                 red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
                 brightness = (red * 299 + green * 587 + blue * 114) / 1000
                 text_color = "#20243d" if brightness > 165 else "#ffffff"
-                return f"background: {background}; color: {text_color}; font-weight: 700;"
+                style = f"background-color: {color}; color: {text_color}; font-weight: 700;"
+                if background != color:
+                    style += f" background-image: {background};"
+                return style
 
             for empty_col in ["追加参加決定日", "補足"]:
                 if empty_col in attendance_clean_df.columns:
@@ -5713,6 +5716,11 @@ if os.path.exists(SETLIST_FILE):
             attendance_clean_df["所属ユニット"] = attendance_clean_df.apply(
                 attendance_unit_at_event, axis=1
             )
+            # ユニットとして出演しない予定の記録では、所属欄を表示しない。
+            attendance_clean_df.loc[
+                attendance_clean_df["参加状況"].astype(str).str.contains("ユニット出演予定なし", na=False),
+                "所属ユニット",
+            ] = ""
             attendance_clean_df["_event_group"] = attendance_clean_df["公演名"].map(attendance_event_key)
             attendance_clean_df["_day_order"] = attendance_clean_df["日程"].map(attendance_day_order)
             attendance_clean_df = attendance_clean_df.sort_values(
