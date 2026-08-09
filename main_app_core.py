@@ -2114,6 +2114,7 @@ if os.path.exists(SETLIST_FILE):
     idol_to_cast_map = {}
     idol_to_unit_map = {}
     idol_to_groups_map = {}
+    group_member_map_by_column = {}
 
     if os.path.exists(IDOL_MASTER_FILE):
         idol_df = load_normalized_csv(IDOL_MASTER_FILE)
@@ -2148,6 +2149,7 @@ if os.path.exists(SETLIST_FILE):
                     group = str(row[group_col]) if pd.notnull(row[group_col]) else ""
                     if group and group != "nan":
                         groups.add(group)
+                        group_member_map_by_column.setdefault(group_col, {})[ch] = group
                 if ch and ch != "nan":
                     idol_list.append(ch)
                     if un: idol_to_unit_map[ch] = un
@@ -2159,6 +2161,10 @@ if os.path.exists(SETLIST_FILE):
                             cast_to_idol_map[sub_ca.strip()] = ch
                             if un: idol_to_unit_map[sub_ca.strip()] = un
                             if groups: idol_to_groups_map[sub_ca.strip()] = groups
+                            for group_col in member_group_columns:
+                                group = str(row[group_col]) if pd.notnull(row[group_col]) else ""
+                                if group and group != "nan":
+                                    group_member_map_by_column.setdefault(group_col, {})[sub_ca.strip()] = group
                 if ch and ca:
                     idol_to_cast_map[ch] = ca
 
@@ -5650,9 +5656,25 @@ if os.path.exists(SETLIST_FILE):
             )
             # 斑鳩ルカ（川口莉奈）は 5.5th Anniversary LIVE からコメティックへ加入。
             # それ以前の参加履歴は、現在の所属ではなく「ソロ」と表示する。
+            def event_specific_unit_column(event_name):
+                """通常ユニットではない、公演固有のチーム編成を選ぶ。"""
+                name = clean_live_name(str(event_name)).lower()
+                if "master showpiece" in name:
+                    return "-Master ShowPiece-"
+                if "refrac7ions" in name or "still blue" in name:
+                    return "PJ: REFRAC7IONS"
+                if "シャニマス大感謝祭" in name or "283スポーツフェスティバル" in name:
+                    return "Team."
+                return ""
+
             def attendance_unit_at_event(row):
                 cast_name = str(row.get("キャスト", ""))
                 event_date = row.get("_event_date")
+                special_column = event_specific_unit_column(row.get("公演名", ""))
+                if special_column:
+                    special_unit = group_member_map_by_column.get(special_column, {}).get(cast_name)
+                    if special_unit:
+                        return special_unit
                 if cast_name in {"川口莉奈", "斑鳩ルカ"} and pd.notna(event_date):
                     if event_date < pd.Timestamp("2023-10-21"):
                         return "ソロ"
