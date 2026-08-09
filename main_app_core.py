@@ -116,6 +116,14 @@ if PUBLIC_MODE:
             opacity: 1 !important;
             z-index: 1000000 !important;
         }
+        /* 公開版スマホ: シリーズ・アルバムは候補から選ぶだけにして、
+           タップ時にソフトキーボードを出さない。楽曲検索には適用しない。 */
+        .st-key-tab2_sel_series_nonsearch [data-baseweb="select"] input,
+        .st-key-tab2_sel_album_nonsearch [data-baseweb="select"] input {
+            pointer-events: none !important;
+            caret-color: transparent !important;
+            user-select: none !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1538,20 +1546,14 @@ def unique_in_registered_order(values):
 
 
 def render_filter_choice(label, options, key):
-    """公開スマホ版では、少数の絞り込みを検索入力なしのボタン式で出す。"""
+    """シリーズ・アルバムは通常のプルダウンで選択する。"""
     options = list(options)
     if not options:
         return None
     if PUBLIC_MODE:
-        selected = st.pills(
-            label,
-            options,
-            selection_mode="single",
-            default=options[0],
-            key=key,
-            width="stretch",
-        )
-        return selected if selected is not None else options[0]
+        # key 付きコンテナで、公開スマホ版だけ文字入力を止めるCSSを限定適用する。
+        with st.container(key=f"{key}_nonsearch"):
+            return st.selectbox(label, options, key=key)
     return st.selectbox(label, options, key=key)
 
 
