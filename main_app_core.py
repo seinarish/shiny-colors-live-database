@@ -1152,6 +1152,36 @@ MEMBER_COLOR_MAP = {
     "七草はづき": "#8adfff", "シャイニーカラーズ": "#8dbbff",
 }
 
+# PJ:REFRAC7IONS の配色。既存のイメージカラーと併記し、カード登録時などで確認に使う。
+PROJECT_COLOR_MAP = {
+    "櫻木真乃": "#FBC600", "風野灯織": "#FBFBF6", "八宮めぐる": "#EC6816",
+    "月岡恋鐘": "#8E4593", "田中摩美々": "#F4D500", "白瀬咲耶": "#355273", "三峰結華": "#B0E0E6", "幽谷霧子": "#B86D77",
+    "小宮果穂": "#E3FF00", "園田智代子": "#C1F9A2", "西城樹里": "#D94DFF", "杜野凛世": "#E8ECEF", "有栖川夏葉": "#EB6101",
+    "大崎甘奈": "#FDDDCD", "大崎甜花": "#FFB366", "桑山千雪": "#93B881",
+    "芹沢あさひ": "#ED6C00", "黛冬優子": "#7DF9FF", "和泉愛依": "#B7282E",
+    "浅倉透": "#719BAD", "樋口円香": "#FE347E", "福丸小糸": "#CFD4F1", "市川雛菜": "#235BC8",
+    "七草にちか": "#CEC5F0", "緋田美琴": "#006374", "斑鳩ルカ": "#6050DC", "鈴木羽那": "#FFBCD9", "郁田はるき": "#E83F1D",
+    "I’m a Cutie Finder": "#7BFFC3", "Fumage": "#3582A2", "Sonic Heart (and Signal)": "#0068B7",
+    "Σ Desire": "#A1A3A6", "ザ・ふたりトラベラー": "#E83F1D", "彼岸流": "#5AB5B2", "No 1 feel alone": "#F3F0EF",
+}
+
+SPECIAL_UNIT_COLOR_MAP = {
+    "I’m a Cutie Finder": "#FFD4F5", "Fumage": "#2A5D79", "Sonic Heart (and Signal)": "#FFF700",
+    "Σ Desire": "#282928", "ザ・ふたりトラベラー": "#FBC600", "彼岸流": "#E7001D", "No 1 feel alone": "#AFCBEB",
+}
+
+
+def member_color_swatch(name):
+    """既存色とPJ:REFRAC7IONS色を並べた、小さな確認用スウォッチ。"""
+    primary = MEMBER_COLOR_MAP.get(str(name), "") or SPECIAL_UNIT_COLOR_MAP.get(str(name), "")
+    project = PROJECT_COLOR_MAP.get(str(name), "")
+    colors = [color for color in (primary, project) if re.fullmatch(r"#[0-9a-fA-F]{6}", color)]
+    if not colors:
+        return "", ""
+    background = colors[0] if len(colors) == 1 else f"linear-gradient(135deg, {colors[0]} 0 50%, {colors[1]} 50% 100%)"
+    label = " / ".join(colors)
+    return background, label
+
 
 def find_file(filename):
     if os.path.exists(filename):
@@ -4653,12 +4683,12 @@ if os.path.exists(SETLIST_FILE):
                                 idol_list if idol_list else [""],
                                 key="card_idol_name",
                             )
-                            selected_member_color = MEMBER_COLOR_MAP.get(card_idol_name)
-                            if selected_member_color:
+                            selected_member_background, selected_member_colors = member_color_swatch(card_idol_name)
+                            if selected_member_background:
                                 st.markdown(
                                     f"<span style='display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;'>"
-                                    f"<span style='width:1rem;height:1rem;border-radius:50%;background:{selected_member_color};border:1px solid #777;'></span>"
-                                    f"イメージカラー {selected_member_color}</span>",
+                                    f"<span style='width:1rem;height:1rem;border-radius:50%;background:{selected_member_background};border:1px solid #777;'></span>"
+                                    f"イメージカラー（既存 / PJ:REFRAC7IONS） {selected_member_colors}</span>",
                                     unsafe_allow_html=True,
                                 )
                             card_rarity = st.selectbox(
