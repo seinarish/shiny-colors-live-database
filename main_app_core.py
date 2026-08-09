@@ -5779,6 +5779,10 @@ if os.path.exists(SETLIST_FILE):
                     return "-Master ShowPiece-"
                 if "refrac7ions" in name or "still blue" in name:
                     return "PJ: REFRAC7IONS"
+                # COLORFUL FE@THERS の発売記念イベントは、通常ユニットではなく
+                # Stella / Luna / Sol の企画チームとして参加したものを表示する。
+                if "colorful fe@thers" in name and "発売記念" in name:
+                    return "Team."
                 if "シャニマス大感謝祭" in name or "283スポーツフェスティバル" in name:
                     return "Team."
                 return ""
