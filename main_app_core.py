@@ -96,7 +96,7 @@ st.set_page_config(
     page_icon="✨", 
     layout="wide",
     # 公開版はまずコンテンツを見せ、絞り込み設定は必要なときだけ開けるようにする。
-    initial_sidebar_state="collapsed" if PUBLIC_MODE else "auto"
+    initial_sidebar_state="expanded" if PUBLIC_MODE else "auto"
 )
 
 if PUBLIC_MODE:
@@ -108,6 +108,15 @@ if PUBLIC_MODE:
         [data-testid="stToolbarActions"],
         [data-testid="stHeaderActionElements"],
         [data-testid="stAppDeployButton"] {
+            display: none !important;
+        }
+        /* 公開版のサイドバーは、迷わない閲覧用の案内だけを表示する。 */
+        [data-testid="stSidebar"] [data-testid="stCheckbox"],
+        [data-testid="stSidebar"] [data-testid="stButton"],
+        [data-testid="stSidebar"] [data-baseweb="select"],
+        [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] hr,
+        [data-testid="stSidebar"] .stCaption {
             display: none !important;
         }
         </style>
@@ -2545,6 +2554,11 @@ if os.path.exists(SETLIST_FILE):
     # サイドバー設定
     # ------------------------------------------
     st.sidebar.header("⚙️ 集計・表示設定")
+    if PUBLIC_MODE:
+        st.sidebar.info(
+            "公開版はすべての公演区分・楽曲区分を表示しています。"
+            "曲名や公演名は、各ページの候補から選んで絞り込めます。"
+        )
     source_files = [
         file_path
         for file_path in [
@@ -2750,6 +2764,12 @@ if os.path.exists(SETLIST_FILE):
     )
 
     if PUBLIC_MODE:
+        # 公開版は閲覧専用として固定ルールを使う。
+        unify_member_names = True
+        include_versions = True
+        include_no_vocal = False
+
+    if PUBLIC_MODE:
         exclude_talk_events = True
     else:
         exclude_talk_events = st.sidebar.checkbox(
@@ -2827,6 +2847,8 @@ if os.path.exists(SETLIST_FILE):
         key="include_individual_artist_activity",
         help="キャストが個人名義のアーティストとして歌唱した、シャイニーカラーズ楽曲の記録を含めます。",
     )
+    if PUBLIC_MODE:
+        include_individual_artist_activity = False
     if not include_individual_artist_activity:
         df = df.loc[~individual_artist_mask].copy()
 
@@ -2888,6 +2910,10 @@ if os.path.exists(SETLIST_FILE):
                 st.session_state.selected_event_types.add(etype)
             st.rerun()
 
+    if PUBLIC_MODE:
+        # 公開版は絞り込みを設けず、すべての公演区分を表示する。
+        st.session_state.selected_event_types = set(all_event_types)
+
     df = df[
         df["公演区分フィルター"].apply(
             lambda categories: set(categories).issubset(st.session_state.selected_event_types)
@@ -2940,6 +2966,10 @@ if os.path.exists(SETLIST_FILE):
             else:
                 st.session_state.selected_cat_types.add(ctype)
             st.rerun()
+
+    if PUBLIC_MODE:
+        # 公開版は絞り込みを設けず、すべての楽曲区分を表示する。
+        st.session_state.selected_cat_types = set(all_cat_types)
 
     df = df[df["楽曲区分"].isin(st.session_state.selected_cat_types)]
 
@@ -3365,7 +3395,7 @@ if os.path.exists(SETLIST_FILE):
                 selected_lives = st.multiselect(
                     "分析対象の公演を選択してください (複数選択で合算表示):",
                     options=all_lives,
-                    default=[all_lives[0]],
+                    default=all_lives if PUBLIC_MODE else [all_lives[0]],
                     key="selected_lives"
                 )
 
@@ -6423,11 +6453,21 @@ if os.path.exists(SETLIST_FILE):
             st.info("分類は検索や集計をしやすくするための管理上の目安です。公式発表の分類ではありません。")
 
             st.subheader("🔎 曲・公演の分類を調べる")
-            classification_query = st.text_input(
-                "曲名または公演名を入力",
-                placeholder="例：Spread the Wings!!、5thLIVE",
+            guide_event_column = next(
+                (column for column in event_df.columns if "公演" in column or "イベント" in column or "ライブ" in column),
+                None,
+            ) if not event_df.empty else None
+            guide_options = unique_in_registered_order(
+                df["楽曲名"].astype(str).tolist()
+                + (event_df[guide_event_column].astype(str).tolist() if guide_event_column else [])
+            )
+            classification_query = st.selectbox(
+                "曲名または公演名を選択",
+                [""] + guide_options,
+                format_func=lambda value: "候補を検索して選択" if not value else value,
                 key="classification_guide_query",
-            ).strip()
+                help="候補名を入力して絞り込み、表示された候補から選びます。",
+            )
             if classification_query:
                 song_matches = unique_in_registered_order(
                     df.loc[
