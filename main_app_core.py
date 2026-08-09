@@ -1199,6 +1199,19 @@ def display_group_color(name):
     return MEMBER_COLOR_MAP.get(str(name), "") or SPECIAL_UNIT_COLOR_MAP.get(str(name), "")
 
 
+def display_group_background(name):
+    """PJ:REFRAC7IONS は色①・色②を使い、その他は単色で表示する。"""
+    primary = display_group_color(name)
+    accent = PROJECT_COLOR_MAP.get(str(name), "")
+    if (
+        str(name) in SPECIAL_UNIT_COLOR_MAP
+        and re.fullmatch(r"#[0-9a-fA-F]{6}", primary)
+        and re.fullmatch(r"#[0-9a-fA-F]{6}", accent)
+    ):
+        return f"linear-gradient(135deg, {primary} 0%, {primary} 48%, {accent} 52%, {accent} 100%)"
+    return primary
+
+
 def find_file(filename):
     if os.path.exists(filename):
         return filename
@@ -5601,12 +5614,13 @@ if os.path.exists(SETLIST_FILE):
             def unit_cell_style(unit_name):
                 """公式ユニットカラーを表に使いつつ、文字の可読性を保つ。"""
                 color = display_group_color(unit_name)
+                background = display_group_background(unit_name)
                 if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
                     return ""
                 red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
                 brightness = (red * 299 + green * 587 + blue * 114) / 1000
                 text_color = "#20243d" if brightness > 165 else "#ffffff"
-                return f"background-color: {color}; color: {text_color}; font-weight: 700;"
+                return f"background: {background}; color: {text_color}; font-weight: 700;"
 
             for empty_col in ["追加参加決定日", "補足"]:
                 if empty_col in attendance_clean_df.columns:
