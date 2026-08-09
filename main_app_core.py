@@ -5779,13 +5779,18 @@ if os.path.exists(SETLIST_FILE):
             def attendance_unit_at_event(row):
                 cast_name = str(row.get("キャスト", ""))
                 event_date = row.get("_event_date")
+                event_name = clean_live_name(str(row.get("公演名", ""))).lower()
                 special_column = event_specific_unit_column(row.get("公演名", ""))
                 if special_column:
                     special_unit = group_member_map_by_column.get(special_column, {}).get(cast_name)
                     if special_unit:
                         return special_unit
-                if cast_name in {"川口莉奈", "斑鳩ルカ"} and pd.notna(event_date):
-                    if event_date < pd.Timestamp("2023-10-21"):
+                if cast_name in {"川口莉奈", "斑鳩ルカ"}:
+                    # 5.5th は斑鳩ルカのコメティック加入後。公演名でも明示して、
+                    # 略称の参加履歴で日付照合に失敗してもソロ扱いにならないようにする。
+                    if "5.5th anniversary" in event_name and "星が見上げた空" in event_name:
+                        return "コメティック"
+                    if pd.notna(event_date) and event_date < pd.Timestamp("2023-10-21"):
                         return "ソロ"
                 return idol_to_unit_map.get(cast_name, "その他")
 
