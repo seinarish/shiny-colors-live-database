@@ -104,7 +104,6 @@ if PUBLIC_MODE:
     st.markdown(
         """
         <style>
-        [data-testid="stToolbar"],
         [data-testid="stToolbarActions"],
         [data-testid="stHeaderActionElements"],
         [data-testid="stAppDeployButton"] {
@@ -116,17 +115,40 @@ if PUBLIC_MODE:
             opacity: 1 !important;
             z-index: 1000000 !important;
         }
-        /* 公開版スマホ: シリーズ・アルバムは候補から選ぶだけにして、
-           タップ時にソフトキーボードを出さない。楽曲検索には適用しない。 */
-        .st-key-tab2_sel_series_nonsearch [data-baseweb="select"] input,
-        .st-key-tab2_sel_album_nonsearch [data-baseweb="select"] input {
-            pointer-events: none !important;
-            caret-color: transparent !important;
-            user-select: none !important;
+        [data-testid="stSidebarCollapsedControl"]::after {
+            content: " 絞り込み";
+            font-size: 0.82rem;
+            font-weight: 700;
+            white-space: nowrap;
         }
         </style>
         """,
         unsafe_allow_html=True,
+    )
+    components.html(
+        """
+        <script>
+        const searchableLabels = ["分析する楽曲", "曲名または公演名"];
+        const lockNonSearchSelects = () => {
+          try {
+            const doc = window.parent.document;
+            doc.querySelectorAll('[data-testid="stSelectbox"]').forEach((box) => {
+              const isSearchable = searchableLabels.some((label) => box.innerText.includes(label));
+              const input = box.querySelector('input');
+              if (!input || isSearchable) return;
+              input.readOnly = true;
+              input.setAttribute('inputmode', 'none');
+              input.addEventListener('keydown', (event) => event.preventDefault());
+            });
+          } catch (_) {}
+        };
+        lockNonSearchSelects();
+        new MutationObserver(lockNonSearchSelects).observe(window.parent.document.documentElement, {
+          childList: true, subtree: true
+        });
+        </script>
+        """,
+        height=0,
     )
 
 # 公式Shiny Colors風のビジュアル ＆ 全域テキスト自動折り返し＆明るいテーマ固定CSS
@@ -1550,10 +1572,6 @@ def render_filter_choice(label, options, key):
     options = list(options)
     if not options:
         return None
-    if PUBLIC_MODE:
-        # key 付きコンテナで、公開スマホ版だけ文字入力を止めるCSSを限定適用する。
-        with st.container(key=f"{key}_nonsearch"):
-            return st.selectbox(label, options, key=key)
     return st.selectbox(label, options, key=key)
 
 
