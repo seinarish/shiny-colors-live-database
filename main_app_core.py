@@ -1226,7 +1226,8 @@ def render_unit_color_badges(unit_names):
         text_color = "#20243d" if brightness > 165 else "#ffffff"
         badges.append(
             '<span style="display:inline-block;margin:0 8px 8px 0;padding:5px 10px;'
-            f'border-radius:999px;background:{background};color:{text_color};font-weight:700;">'
+            f'border-radius:999px;background:{background};color:{text_color} !important;'
+            'font-weight:800;text-shadow:0 1px 1px rgba(255,255,255,.22);">'
             f'{html.escape(unit_name)}</span>'
         )
     if badges:
