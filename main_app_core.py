@@ -1319,6 +1319,8 @@ def make_search_key(text):
         return ""
     text = clean_song_title_for_search(text).lower()
     text = text.replace("？", "?").replace("！", "!")
+    # 「フェアリー・ガール」/「フェアリーガール」のような中黒の有無は同一扱いにする。
+    text = text.replace("・", "").replace("･", "")
     return re.sub(r"\s+", "", text)
 
 
