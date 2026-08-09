@@ -5775,9 +5775,18 @@ if os.path.exists(SETLIST_FILE):
             def event_specific_unit_column(event_name):
                 """通常ユニットではない、公演固有のチーム編成を選ぶ。"""
                 name = clean_live_name(str(event_name)).lower()
+                pj_release_markers = (
+                    "カウントダウンラブ", "kawaii♡めたもる交響曲",
+                    "karma / naraku", "super duper dreamer", "散花-sanka-",
+                    "ボーダーレス・ノンストレス", "ring ring ringの魔法", "tokyo自由系*ガール",
+                )
                 if "master showpiece" in name:
                     return "-Master ShowPiece-"
                 if "refrac7ions" in name or "still blue" in name:
+                    return "PJ: REFRAC7IONS"
+                # Song for Prism のPJ企画盤発売記念イベントは、通常ユニットではなく
+                # PJ: REFRAC7IONS 内の企画ユニットとして参加したものを表示する。
+                if "song for prism" in name and "発売記念" in name and any(marker in name for marker in pj_release_markers):
                     return "PJ: REFRAC7IONS"
                 # COLORFUL FE@THERS の発売記念イベントは、通常ユニットではなく
                 # Stella / Luna / Sol の企画チームとして参加したものを表示する。
