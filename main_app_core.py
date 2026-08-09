@@ -184,6 +184,13 @@ st.markdown(
         color: #2c2c54 !important;
     }
 
+    /* ユニットカラーのバッジは背景の明暗に左右されず読めるようにする */
+    .unit-color-badge,
+    .unit-color-badge * {
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.92), 0 0 2px rgba(0, 0, 0, 0.95) !important;
+    }
+
     /* 余白調整 */
     .block-container {
         padding-top: 1.5rem;
@@ -1257,13 +1264,10 @@ def render_unit_color_badges(unit_names):
         background = display_group_background(unit_name)
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
             continue
-        red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
-        brightness = (red * 299 + green * 587 + blue * 114) / 1000
-        text_color = "#20243d" if brightness > 165 else "#ffffff"
         badges.append(
-            '<span style="display:inline-block;margin:0 8px 8px 0;padding:5px 10px;'
-            f'border-radius:999px;background:{background};color:{text_color} !important;'
-            'font-weight:800;text-shadow:0 1px 1px rgba(255,255,255,.22);">'
+            '<span class="unit-color-badge" style="display:inline-block;margin:0 8px 8px 0;padding:5px 10px;'
+            f'border-radius:999px;background:{background};box-shadow:inset 0 0 0 999px rgba(0,0,0,.10);'
+            'font-weight:800;">'
             f'{html.escape(unit_name)}</span>'
         )
     if badges:
@@ -5695,10 +5699,13 @@ if os.path.exists(SETLIST_FILE):
                     return ""
                 red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
                 brightness = (red * 299 + green * 587 + blue * 114) / 1000
-                text_color = "#20243d" if brightness > 165 else "#ffffff"
+                is_gradient = str(background).startswith("linear-gradient")
+                text_color = "#ffffff" if is_gradient else ("#20243d" if brightness > 165 else "#ffffff")
                 style = f"background-color: {color}; color: {text_color}; font-weight: 700;"
                 if background != color:
                     style += f" background-image: {background};"
+                if is_gradient:
+                    style += " text-shadow: 0 1px 2px rgba(0,0,0,.78);"
                 return style
 
             for empty_col in ["追加参加決定日", "補足"]:
