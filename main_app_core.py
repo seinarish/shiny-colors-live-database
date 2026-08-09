@@ -1176,6 +1176,9 @@ PROJECT_COLOR_MAP = {
 SPECIAL_UNIT_COLOR_MAP = {
     "I’m a Cutie Finder": "#FFD4F5", "Fumage": "#2A5D79", "Sonic Heart (and Signal)": "#FFF700",
     "Σ Desire": "#282928", "ザ・ふたりトラベラー": "#FBC600", "彼岸流": "#E7001D", "No 1 feel alone": "#AFCBEB",
+    "Team.Stella": "#E9868C", "Team.Luna": "#527CC5", "Team.Sol": "#D5A52C",
+    "アール・エ・クルール": "#4F78D8", "マエストリア・エ・トラディチオーネ": "#078B96",
+    "ストリート・アンド・アヴォンガード": "#F05D55", "アーバン・アンド・ライフスタイル": "#9A9A9A",
 }
 
 
@@ -1189,6 +1192,11 @@ def member_color_swatch(name):
     background = colors[0] if len(colors) == 1 else f"linear-gradient(135deg, {colors[0]} 0 50%, {colors[1]} 50% 100%)"
     label = " / ".join(colors)
     return background, label
+
+
+def display_group_color(name):
+    """通常・公演固有を問わず、表示に使う代表色を返す。"""
+    return MEMBER_COLOR_MAP.get(str(name), "") or SPECIAL_UNIT_COLOR_MAP.get(str(name), "")
 
 
 def find_file(filename):
@@ -5592,7 +5600,7 @@ if os.path.exists(SETLIST_FILE):
 
             def unit_cell_style(unit_name):
                 """公式ユニットカラーを表に使いつつ、文字の可読性を保つ。"""
-                color = MEMBER_COLOR_MAP.get(str(unit_name), "")
+                color = display_group_color(unit_name)
                 if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
                     return ""
                 red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
