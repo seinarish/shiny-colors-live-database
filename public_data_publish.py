@@ -57,7 +57,8 @@ def _run(command: list[str], cwd: Path) -> str:
     if result.returncode:
         message = (result.stderr or result.stdout or "処理に失敗しました。").strip()
         raise PublicPublishError(message)
-    return result.stdout.strip()
+    # git status の先頭列は空白を含むため、先頭の空白は消さない。
+    return result.stdout.rstrip()
 
 
 def _github_cli_path() -> str:
@@ -154,7 +155,11 @@ def prepare_public_data_sync() -> list[str]:
     return [
         line[3:].strip()
         for line in changed.splitlines()
-        if line.strip() and Path(line[3:].strip()).name not in PRIVATE_FILES
+        if (
+            line.strip()
+            and Path(line[3:].strip()).name not in PRIVATE_FILES
+            and ".backup_" not in line[3:].strip()
+        )
     ]
 
 
