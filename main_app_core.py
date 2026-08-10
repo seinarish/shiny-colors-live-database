@@ -3226,6 +3226,21 @@ if os.path.exists(SETLIST_FILE):
     if not PUBLIC_MODE:
         tab_labels.append("📝 ライブ中メモ")
 
+    # 公開版は閲覧・分析に必要な入口だけに絞る。編集、下書き、画像管理などは
+    # ローカル管理版専用のまま残す。
+    public_tab_labels = [
+        tab_labels[1],  # 分析
+        tab_labels[2],  # 楽曲
+        tab_labels[3],  # 歌唱・衣装
+        tab_labels[4],  # 衣装
+        tab_labels[8],  # 公演
+        tab_labels[9],  # 参加履歴
+        "📚 分類ガイド",
+        "🔰 使い方",
+        "ℹ️ このサイトについて",
+    ]
+    visible_tab_labels = public_tab_labels if PUBLIC_MODE else tab_labels
+
     home_page_tabs = {
         "home": "✨ ホーム",
         "analysis": "📊 分析",
@@ -3239,13 +3254,18 @@ if os.path.exists(SETLIST_FILE):
         "songlist": "📋 楽曲一覧",
     }
     requested_home_page = str(st.query_params.get("page", "home"))
-    requested_tab = home_page_tabs.get(requested_home_page, "✨ ホーム")
+    requested_tab = home_page_tabs.get(
+        requested_home_page,
+        tab_labels[1] if PUBLIC_MODE else tab_labels[0],
+    )
+    if requested_tab not in visible_tab_labels:
+        requested_tab = visible_tab_labels[0]
     if st.session_state.get("_handled_home_page") != requested_home_page:
         st.session_state["main_navigation_tabs"] = requested_tab
         st.session_state["_handled_home_page"] = requested_home_page
     selected_tab = st.pills(
         "ページを選択",
-        tab_labels,
+        visible_tab_labels,
         selection_mode="single",
         default=requested_tab,
         key="main_navigation_tabs",
@@ -9012,6 +9032,23 @@ if os.path.exists(SETLIST_FILE):
                     render_analysis_chart(trend_chart, key="tab13_total_performance_trend")
                 else:
                     st.info("日付データを登録すると、年ごとの公演・披露回数を表示できます。")
+
+    # 公開版の案内ページ。管理版には不要なため、公開時だけ表示する。
+    if PUBLIC_MODE and selected_tab == "📚 分類ガイド":
+        render_page_header("📚", "分類ガイド", "このサイト内で使っている公演・楽曲の区分を確認できます。")
+        st.markdown("#### 公演区分")
+        st.markdown("単独・キャストライブ・合同・XR・発売記念イベントなど、内容に応じて分類しています。複数の区分を持つ公演は、該当する区分をすべて選んだときに表示されます。")
+        st.markdown("#### 楽曲データ")
+        st.markdown("シャイニーカラーズのキャストまたはアイドルが歌唱した楽曲を対象にしています。他ブランドによるカバー歌唱は集計に含めていません。")
+
+    if PUBLIC_MODE and selected_tab == "🔰 使い方":
+        render_page_header("🔰", "使い方", "見たい切り口から選んで、条件を絞り込めます。")
+        st.markdown("- **分析**：楽曲・衣装・ユニットごとの傾向を比較できます。\n- **楽曲**：収録アルバム、披露履歴、公式映像を確認できます。\n- **公演・参加履歴**：セットリストや出演状況を公演ごと・キャストごとに確認できます。")
+        st.caption("サイドバーの絞り込み条件は、各ページの集計に共通で反映されます。")
+
+    if PUBLIC_MODE and selected_tab == "ℹ️ このサイトについて":
+        render_page_header("ℹ️", "このサイトについて", "シャイニーカラーズのライブ記録を見やすく確認するための非公式データベースです。")
+        st.markdown("情報に誤りや表示上の問題があれば、サイト案内の連絡先までお知らせください。データは順次更新しています。")
 
 else:
     st.warning("⚠️ `songs.csv` が見つかりません。配置をご確認ください。")
