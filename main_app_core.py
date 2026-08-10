@@ -10,37 +10,52 @@ import calendar
 import textwrap
 import shutil
 import html
-import importlib
 from pathlib import Path
 from datetime import datetime
 from functools import lru_cache
-from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
-import event_image_gallery
-event_image_gallery = importlib.reload(event_image_gallery)
-from event_image_gallery import (
-    render_calendar_context_images,
-    render_costume_context_images,
-    render_event_context_images,
-    render_event_image_gallery,
-    render_gacha_context_images,
-)
-from public_data_publish import (
-    PublicPublishError,
-    discard_prepared_public_data,
-    prepare_public_data_sync,
-    publish_prepared_public_data,
-)
-
-
-# Streamlitの再読み込み中に旧モジュールが残っていても、画面全体を止めない。
-find_event_logo_path = getattr(event_image_gallery, "find_event_logo_path", lambda _event_name: None)
-find_event_setlist_image_paths = getattr(event_image_gallery, "find_event_setlist_image_paths", lambda _event_names: [])
-
 PUBLIC_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "local")).casefold() == "public"
+
+# 公開版ではローカル素材の走査・画像レポート・公開データ操作を読み込まない。
+# 表示しない機能のメモリ使用量を減らし、Cloud側の安定性を優先する。
+if not PUBLIC_MODE:
+    import importlib
+    from PIL import Image, ImageDraw, ImageFont
+    import event_image_gallery
+
+    event_image_gallery = importlib.reload(event_image_gallery)
+    from event_image_gallery import (
+        render_calendar_context_images,
+        render_costume_context_images,
+        render_event_context_images,
+        render_event_image_gallery,
+        render_gacha_context_images,
+    )
+    from public_data_publish import (
+        PublicPublishError,
+        discard_prepared_public_data,
+        prepare_public_data_sync,
+        publish_prepared_public_data,
+    )
+
+    # Streamlitの再読み込み中に旧モジュールが残っていても、画面全体を止めない。
+    find_event_logo_path = getattr(event_image_gallery, "find_event_logo_path", lambda _event_name: None)
+    find_event_setlist_image_paths = getattr(event_image_gallery, "find_event_setlist_image_paths", lambda _event_names: [])
+else:
+    # 公開版では関連画像を表示しない。呼び出し側を分岐だらけにしないための安全な空関数。
+    def _skip_local_media(*_args, **_kwargs):
+        return None
+
+    render_calendar_context_images = _skip_local_media
+    render_costume_context_images = _skip_local_media
+    render_event_context_images = _skip_local_media
+    render_event_image_gallery = _skip_local_media
+    render_gacha_context_images = _skip_local_media
+    find_event_logo_path = lambda _event_name: None
+    find_event_setlist_image_paths = lambda _event_names: []
 
 # 公開版は小さなメモリ枠で動くため、使い終えた集計結果を早めに入れ替える。
 # ローカル版は編集作業の快適さを優先して従来どおり多めに保持する。
