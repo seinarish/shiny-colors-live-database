@@ -27,16 +27,33 @@ class PublicPublishError(RuntimeError):
     """公開用データの同期を安全に中止するときに使う例外。"""
 
 
+def _git_executable_path() -> str:
+    """Streamlitから起動してPATHが短い場合でもGitを見つける。"""
+    candidates = [
+        shutil.which("git"),
+        str(Path(r"C:\Program Files\Git\cmd\git.exe")),
+        str(Path(r"C:\Program Files\Git\bin\git.exe")),
+    ]
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return candidate
+    raise PublicPublishError("Gitが見つかりません。Git for Windows をインストールしてから再試行してください。")
+
+
 def _run(command: list[str], cwd: Path) -> str:
-    result = subprocess.run(
-        command,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
+    resolved_command = [_git_executable_path(), *command[1:]] if command and command[0] == "git" else command
+    try:
+        result = subprocess.run(
+            resolved_command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise PublicPublishError("公開処理に必要なプログラムが見つかりません。Gitの設定を確認してください。") from exc
     if result.returncode:
         message = (result.stderr or result.stdout or "処理に失敗しました。").strip()
         raise PublicPublishError(message)
