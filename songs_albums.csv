@@ -1,255 +1,257 @@
-Column 7,楽曲名,アルバム,リリース日,歌唱者
-1,Spread the Wings!! ,BRILLI@NT WING 01 ,2018/05/07,シャイニーカラーズ
-2,Multicolored Sky ,BRILLI@NT WING 01 ,2018/05/07,シャイニーカラーズ
-3,ヒカリのdestination,BRILLI@NT WING 02,2018/07/04,イルミネーションスターズ
-4,虹になれ,BRILLI@NT WING 02,2018/07/04,イルミネーションスターズ
-5,バベルシティ・グレイス ,BRILLI@NT WING 03,2018/08/01,アンティーカ
-6,幻惑SILHOUETTE,BRILLI@NT WING 03,2018/08/01,アンティーカ
-7,夢咲きAfter school,BRILLI@NT WING 04,2018/09/05,放課後クライマックスガールズ
-8,太陽キッス,BRILLI@NT WING 04,2018/09/05,放課後クライマックスガールズ
-9,アルストロメリア,BRILLI@NT WING 05,2018/10/03,アルストロメリア
-10,ハピリリ,BRILLI@NT WING 05,2018/10/03,アルストロメリア
-11,SNOW FLAKES MEMORIES,SE@SONAL WINTER,2018/12/19,シャイニーカラーズ
-12,Let's get a chance ,SE@SONAL WINTER,2018/12/19,シャイニーカラーズ
-13,Ambitious Eve,FR@GMENT WING 01,2019/04/10,シャイニーカラーズ
-14,いつか Shiny Days,FR@GMENT WING 01,2019/04/10,シャイニーカラーズ
-15,We can go now!,FR@GMENT WING 02,2019/05/08,イルミネーションスターズ
-16,トライアングル,FR@GMENT WING 02,2019/05/08,イルミネーションスターズ
-17,NEO THEORY FANTASY,FR@GMENT WING 03,2019/06/12,アンティーカ
-18,ラビリンス・レジスタンス,FR@GMENT WING 03,2019/06/12,アンティーカ
-19,ビーチブレイバー,FR@GMENT WING 04,2019/07/10,放課後クライマックスガールズ
-20,よりみちサンセット,FR@GMENT WING 04,2019/07/10,放課後クライマックスガールズ
-21,Bloomy!,FR@GMENT WING 05,2019/08/21,アルストロメリア
-22,Love Addiction,FR@GMENT WING 05,2019/08/21,アルストロメリア
-23,Wandering Dream Chaser,FR@GMENT WING 06,2019/09/11,ストレイライト
-24,Transcending The World,FR@GMENT WING 06,2019/09/11,ストレイライト
-25,FUTURITY SMILE,FUTURITY SMILE,2019/12/18,シャイニーカラーズ
-26,SWEET♡STEP,SWEET♡STEP,2020/02/12,シャイニーカラーズ
-27,シャイノグラフィ ,GR@DATE WING 01,2020/04/08,シャイニーカラーズ
-28,Dye the sky. ,GR@DATE WING 01,2020/04/08,シャイニーカラーズ
-29,絶対正義 EVERY DAY,デビ太郎 VS ジャスティスV,2020/07/29,小宮果穂
-30,デビ太郎のうた,デビ太郎 VS ジャスティスV,2020/07/29,大崎甜花
-31,Hide & Attack,GR@DATE WING 06,2020/08/19,ストレイライト
-32,Destined Rival,GR@DATE WING 06,2020/08/19,ストレイライト
-33,いつだって僕らは,GR@DATE WING 07,2020/09/16,ノクチル
-34,あの花のように,GR@DATE WING 07,2020/09/16,ノクチル
-35,なんどでも笑おう,なんどでも笑おう,2020/09/30,櫻木真乃;風野灯織;八宮めぐる
-36,Twinkle way,GR@DATE WING 02,2020/10/14,イルミネーションスターズ
-37,Happy Funny Lucky,GR@DATE WING 02,2020/10/14,イルミネーションスターズ
-38,Black Reverie ,GR@DATE WING 03,2020/11/04,アンティーカ
-39,純白トロイメライ,GR@DATE WING 03,2020/11/04,アンティーカ
-40,五ツ座流星群,GR@DATE WING 04,2020/11/18,放課後クライマックスガールズ
-41,学祭革命夜明け前,GR@DATE WING 04,2020/11/18,放課後クライマックスガールズ
-42,ダブル・イフェクト,GR@DATE WING 05,2020/12/09,アルストロメリア
-43,Anniversary,GR@DATE WING 05,2020/12/09,アルストロメリア
-44,プラニスフィア ～planisphere～,COLORFUL FE@THERS -Stella-,2021/01/20,Team.Stella
-45,ありったけの輝きで,COLORFUL FE@THERS -Stella-,2021/01/20,櫻木真乃
-46,星をめざして,COLORFUL FE@THERS -Stella-,2021/01/20,芹沢あさひ
-47,夢見鳥,COLORFUL FE@THERS -Stella-,2021/01/20,樋口円香
-48,アポイント・シグナル,COLORFUL FE@THERS -Stella-,2021/01/20,月岡恋鐘
-49,チョコデート・サンデー,COLORFUL FE@THERS -Stella-,2021/01/20,園田智代子
-50,Sweet Memories,COLORFUL FE@THERS -Stella-,2021/01/20,大崎甘奈
-51,ハナマルバッジ,COLORFUL FE@THERS -Stella-,2021/01/20,小宮果穂
-52,リフレクトサイン,COLORFUL FE@THERS -Luna-,2021/02/17,Team.Luna
-53,誰ソ彼アイデンティティー,COLORFUL FE@THERS -Luna-,2021/02/17,田中摩美々
-54,わたしの主人公はわたしだから！,COLORFUL FE@THERS -Luna-,2021/02/17,福丸小糸
-55,また明日,COLORFUL FE@THERS -Luna-,2021/02/17,大崎甜花
-56,常咲の庭,COLORFUL FE@THERS -Luna-,2021/02/17,杜野凛世
-57,プラスチック・アンブレラ,COLORFUL FE@THERS -Luna-,2021/02/17,三峰結華
-58,Going my way,COLORFUL FE@THERS -Luna-,2021/02/17,和泉愛依
-59,雪・月・風・花,COLORFUL FE@THERS -Luna-,2021/02/17,幽谷霧子
-60,スローモーション,COLORFUL FE@THERS -Luna-,2021/02/17,風野灯織
-61,千夜アリア,COLORFUL FE@THERS -Sol-,2021/03/10,白瀬咲耶
-62,Damascus Cocktail,COLORFUL FE@THERS -Sol-,2021/03/10,有栖川夏葉
-63,Darling you!,COLORFUL FE@THERS -Sol-,2021/03/10,桑山千雪
-64,あおぞらサイダー,COLORFUL FE@THERS -Sol-,2021/03/10,市川雛菜
-65,SOS,COLORFUL FE@THERS -Sol-,2021/03/10,黛冬優子
-66,過純性ブリーチ,COLORFUL FE@THERS -Sol-,2021/03/10,西城樹里
-67,HAREBARE!!,COLORFUL FE@THERS -Sol-,2021/03/10,八宮めぐる
-68,statice,COLORFUL FE@THERS -Sol-,2021/03/10,浅倉透
-69,SOLAR WAY,COLORFUL FE@THERS -Sol-,2021/03/10,Team.Sol
-70,Resonance⁺ ,L@YERED WING 01,2021/04/14,シャイニーカラーズ
-71,Color Days,L@YERED WING 01,2021/04/14,シャイニーカラーズ
-72,PRISISM,L@YERED WING 02,2021/05/19,イルミネーションスターズ
-73,スマイルシンフォニア,L@YERED WING 02,2021/05/19,イルミネーションスターズ
-74,abyss of conflict ,L@YERED WING 03,2021/06/09,アンティーカ
-75,革命進化論,L@YERED WING 03,2021/06/09,アンティーカ
-76,クライマックスアイランド,L@YERED WING 04,2021/07/14,放課後クライマックスガールズ
-77,拝啓タイムカプセル,L@YERED WING 04,2021/07/14,放課後クライマックスガールズ
-78,VOY@GER ,VOY@GER,2021/08/04,有栖川夏葉;黛冬優子;浅倉透
-79,パステルカラー パスカラカラー,L@YERED WING 05,2021/08/18,アルストロメリア
-80,ラブ・ボナペティート,L@YERED WING 05,2021/08/18,アルストロメリア
-81,Another Rampage,L@YERED WING 06,2021/09/08,ストレイライト
-82,Timeless Shooting Star,L@YERED WING 06,2021/09/08,ストレイライト
-83,僕らだけの未来の空,L@YERED WING 07,2021/10/13,ノクチル
-84,今しかない瞬間を,L@YERED WING 07,2021/10/13,ノクチル
-85,OH MY GOD,L@YERED WING 08,2021/11/10,シーズ
-86,Fly and Fly,L@YERED WING 08,2021/11/10,シーズ
-87,虹の行方 ,PANOR@MA WING 01,2022/04/13,シャイニーカラーズ
-88,Daybreak Age,PANOR@MA WING 01,2022/04/13,シャイニーカラーズ
-89,Killer×Mission, Synse-Side 01,2022/04/23,アンティーカ;ストレイライト
-90,相合学舎, Synse-Side 02,2022/04/23,放課後クライマックスガールズ;ノクチル
-91,Secret utopIA, Synse-Side 03,2022/04/23,イルミネーションスターズ;アルストロメリア;シーズ
-92,FELICE,PANOR@MA WING 02,2022/05/11,イルミネーションスターズ
-93,イルミネイトコンサート,PANOR@MA WING 02,2022/05/11,イルミネーションスターズ
-94,浮動性イノセンス,PANOR@MA WING 03,2022/06/15,アンティーカ
-95,愚者の独白,PANOR@MA WING 03,2022/06/15,アンティーカ
-96,一閃は君が導く,PANOR@MA WING 04,2022/07/13,放課後クライマックスガールズ
-97,キャットスクワッド,PANOR@MA WING 04,2022/07/13,放課後クライマックスガールズ
-98,VERY BERRY LOVE,PANOR@MA WING 05,2022/08/10,アルストロメリア
-99,Give me some more...,PANOR@MA WING 05,2022/08/10,アルストロメリア
+﻿Column 7,楽曲名,アルバム,リリース日,歌唱者,enza実装,シャニソン実装,歓声追加,ソロ歌唱,歌い分け,定点＆縦画面,シャニソン周期,視点追加,MV公開,ソロコレ,ソロコレ発売日,ユニット版収録,初収録CDソロ歌唱
+1,Spread the Wings!!,BRILLI@NT WING 01,2018/05/07,シャイニーカラーズ,2018/04/24,2023/11/14,2026/01/13,2026/01/21,2023/11/14,2026/3/20,既存1週目,2026/5/31,,,,BRILLI@NT WING 各ユニット盤（3曲目・各ユニットVer.）,
+2,Multicolored Sky,BRILLI@NT WING 01,2018/05/07,シャイニーカラーズ,2018/05/14,2023/12/27,,2026/06/20,2023/12/27,2026/5/31,既存1週目,2026/5/31,,,,,
+3,ヒカリのdestination,BRILLI@NT WING 02,2018/07/04,イルミネーションスターズ,2018/04/24,2023/11/14,,,2024/5/14,,既存1週目,,,-1stLIVE FLY TO THE SHINY SKY-,2019/03/09,,
+4,虹になれ,BRILLI@NT WING 02,2018/07/04,イルミネーションスターズ,2018/06/11,,,,,,,,,-SUMMER PARTY 2019-,2019/08/18,,
+5,バベルシティ・グレイス,BRILLI@NT WING 03,2018/08/01,アンティーカ,2018/04/24,2023/11/14,,,2024/5/14,,既存1週目,,,-1stLIVE FLY TO THE SHINY SKY-,2019/03/09,,
+6,幻惑SILHOUETTE,BRILLI@NT WING 03,2018/08/01,アンティーカ,2018/07/03,,,,,,,,,-SUMMER PARTY 2019-,2019/08/18,,
+7,夢咲きAfter school,BRILLI@NT WING 04,2018/09/05,放課後クライマックスガールズ,2018/04/24,2023/11/14,,,2024/5/14,,既存1週目,,,-1stLIVE FLY TO THE SHINY SKY-,2019/03/09,,
+8,太陽キッス,BRILLI@NT WING 04,2018/09/05,放課後クライマックスガールズ,2018/08/06,2025/08/16,,,,,既存2DMV1週目,,,-SUMMER PARTY 2019-,2019/08/18,,
+9,アルストロメリア,BRILLI@NT WING 05,2018/10/03,アルストロメリア,2018/04/24,2023/11/14,,,2024/5/14,,既存1週目,,,-1stLIVE FLY TO THE SHINY SKY-,2019/03/09,,
+10,ハピリリ,BRILLI@NT WING 05,2018/10/03,アルストロメリア,2018/09/03,,,,,,,,,-SUMMER PARTY 2019-,2019/08/18,,
+11,SNOW FLAKES MEMORIES,SE@SONAL WINTER,2018/12/19,シャイニーカラーズ,2018/12/14,2025/12/24,,,2025/12/24,2026/1/21,,,,-MUSIC DAWN-/ -Beyond the Blue sky part2-,2020/10/31,,
+12,Let's get a chance,SE@SONAL WINTER,2018/12/19,シャイニーカラーズ,2018/11/23,,,,,,,,,-M@STERS OF IDOL WORLD!!!!! 2023-/ -Beyond the Blue sky part2-,2023/02/11,,
+13,Ambitious Eve,FR@GMENT WING 01,2019/04/10,シャイニーカラーズ,2019/03/22,2024/05/14,,2026/06/20,2024/05/14,2026/5/31,既存2週目,2026/5/31,,,,FR@GMENT WING 各ユニット盤（3曲目・各ユニットVer.）,
+14,いつか Shiny Days,FR@GMENT WING 01,2019/04/10,シャイニーカラーズ,2019/03/29,2024/06/14,,,2024/06/14,2026/5/31,既存2週目,2026/5/31,,,,,
+15,We can go now!,FR@GMENT WING 02,2019/05/08,イルミネーションスターズ,2019/04/12,2023/11/22,,2026/06/20,2024/11/10,,既存2週目,,,-SPRING PARTY 2020-,2020/03/21,,
+16,トライアングル,FR@GMENT WING 02,2019/05/08,イルミネーションスターズ,2019/04/25,,,,,,,,,-2ndLIVE STEP INTO THE SUNSET SKY-,2020/07/29,,
+17,NEO THEORY FANTASY,FR@GMENT WING 03,2019/06/12,アンティーカ,2019/05/13,2023/12/08,,2026/06/20,2024/11/10,,既存2週目,,,-SPRING PARTY 2020-,2020/03/21,,
+18,ラビリンス・レジスタンス,FR@GMENT WING 03,2019/06/12,アンティーカ,2019/06/07,,,,,,,,,-2ndLIVE STEP INTO THE SUNSET SKY-,2020/07/29,,
+19,ビーチブレイバー,FR@GMENT WING 04,2019/07/10,放課後クライマックスガールズ,2019/06/10,2024/01/11,,2026/01/21,2024/8/9,,既存2週目,,,-SPRING PARTY 2020-,2020/03/21,,
+20,よりみちサンセット,FR@GMENT WING 04,2019/07/10,放課後クライマックスガールズ,2019/06/25,,,,,,,,,-2ndLIVE STEP INTO THE SUNSET SKY-,2020/07/29,,
+21,Bloomy!,FR@GMENT WING 05,2019/08/21,アルストロメリア,2019/06/21,2024/02/09,,2026/01/21,2024/8/9,,既存2週目,,,-SPRING PARTY 2020-,2020/03/21,,
+22,Love Addiction,FR@GMENT WING 05,2019/08/21,アルストロメリア,2019/07/02,,,,,,,,,-2ndLIVE STEP INTO THE SUNSET SKY-,2020/07/29,,
+23,Wandering Dream Chaser,FR@GMENT WING 06,2019/09/11,ストレイライト,2019/04/09,2023/11/14,,,2024/5/14,,既存1週目,,,-SPRING PARTY 2020-,2020/03/21,,
+24,Transcending The World,FR@GMENT WING 06,2019/09/11,ストレイライト,2019/08/26,,,,,,,,,-2ndLIVE STEP INTO THE SUNSET SKY-,2020/07/29,,
+25,FUTURITY SMILE,FUTURITY SMILE,2019/12/18,シャイニーカラーズ,2020/12/09,,,,,,,,,-M@STERS OF IDOL WORLD 2025 part1-,2025/12/13,,
+26,SWEET♡STEP,SWEET♡STEP,2020/02/12,シャイニーカラーズ,2021/01/12,2025/02/10,,,2025/02/10,2026/1/21,,,,-シャニマス大感謝祭！ 〜283スポーツフェスティバル〜 part1-,2026/02/14,,
+27,シャイノグラフィ,GR@DATE WING 01,2020/04/08,シャイニーカラーズ,2021/03/22,2025/05/09,,2026/01/21,2025/05/09,2025/12/18,既存3週目,,,,,GR@DATE WING 各ユニット盤（3曲目・各ユニットVer.）,
+28,Dye the sky.,GR@DATE WING 01,2020/04/08,シャイニーカラーズ,2021/04/03,2025/06/10,,,2025/06/10,2025/06/10,既存3週目,,,,,,
+29,絶対正義 EVERY DAY,デビ太郎 VS ジャスティスV,2020/07/29,小宮果穂,2021/12/10,,,,,,,,,,,,
+30,デビ太郎のうた,デビ太郎 VS ジャスティスV,2020/07/29,大崎甜花,2021/12/10,,,,,,,,,,,,
+31,Hide & Attack,GR@DATE WING 06,2020/08/19,ストレイライト,2020/07/21,2024/03/08,,2026/06/20,2024/8/9,,,,,-3rdLIVE TOUR PIECE ON PLANET / TOKYO-,2021/04/21,,
+32,Destined Rival,GR@DATE WING 06,2020/08/19,ストレイライト,2020/07/31,,,,,,,,,-3rdLIVE TOUR PIECE ON PLANET / FUKUOKA-,2021/05/29,,
+33,いつだって僕らは,GR@DATE WING 07,2020/09/16,ノクチル,2020/04/12,2023/11/14,,,2024/5/14,,既存1週目,,,-3rdLIVE TOUR PIECE ON PLANET / TOKYO-,2021/04/21,,
+34,あの花のように,GR@DATE WING 07,2020/09/16,ノクチル,2020/08/21,,,,,,,,,-3rdLIVE TOUR PIECE ON PLANET / FUKUOKA-,2021/05/29,,
+35,なんどでも笑おう,なんどでも笑おう,2020/09/30,櫻木真乃;風野灯織;八宮めぐる,2021/01/31,,,,,,,,,,,,なんどでも笑おう：初収録CDにキャラクターVer.収録
+36,Twinkle way,GR@DATE WING 02,2020/10/14,イルミネーションスターズ,2020/04/15,2024/07/09,,,2026/06/10,,既存3週目,,,-3rdLIVE TOUR PIECE ON PLANET / TOKYO-,2021/04/21,,
+37,Happy Funny Lucky,GR@DATE WING 02,2020/10/14,イルミネーションスターズ,2020/09/23,,,,,,,,,-3rdLIVE TOUR PIECE ON PLANET / FUKUOKA-,2021/05/29,,
+38,Black Reverie,GR@DATE WING 03,2020/11/04,アンティーカ,2020/10/12,2024/08/10,,,2026/06/10,,既存3週目,,,-3rdLIVE TOUR PIECE ON PLANET / TOKYO-,2021/04/21,,
+39,純白トロイメライ,GR@DATE WING 03,2020/11/04,アンティーカ,2020/10/21,2025/08/27,,,,,既存2DMV1週目,,,-3rdLIVE TOUR PIECE ON PLANET / FUKUOKA-,2021/05/29,,
+40,五ツ座流星群,GR@DATE WING 04,2020/11/18,放課後クライマックスガールズ,2020/10/31,2024/09/10,,,2026/06/10,,既存3週目,,,-3rdLIVE TOUR PIECE ON PLANET / TOKYO-,2021/04/21,,
+41,学祭革命夜明け前,GR@DATE WING 04,2020/11/18,放課後クライマックスガールズ,2020/11/10,,,,,,,,,-3rdLIVE TOUR PIECE ON PLANET / FUKUOKA-,2021/05/29,,
+42,ダブル・イフェクト,GR@DATE WING 05,2020/12/09,アルストロメリア,2020/11/20,2024/11/10,,,2026/06/10,,既存3週目,,,-3rdLIVE TOUR PIECE ON PLANET / TOKYO-,2021/04/21,,
+43,Anniversary,GR@DATE WING 05,2020/12/09,アルストロメリア,2020/11/25,,,,,,,,,-3rdLIVE TOUR PIECE ON PLANET / FUKUOKA-,2021/05/29,,
+44,プラニスフィア ～planisphere～,COLORFUL FE@THERS -Stella-,2021/01/20,Team.Stella,2021/01/08,,,,,,,,,-SOLO PERFORMANCE LIVE 我儘なまま Stella-,2023/07/22,,
+45,ありったけの輝きで,COLORFUL FE@THERS -Stella-,2021/01/20,櫻木真乃,2020/12/18,2023/11/14,,,,,,,,,,,
+46,星をめざして,COLORFUL FE@THERS -Stella-,2021/01/20,芹沢あさひ,2021/01/04,2023/11/14,,,,,,,,,,,
+47,夢見鳥,COLORFUL FE@THERS -Stella-,2021/01/20,樋口円香,2021/01/01,2023/11/24,,,,,,,,,,,
+48,アポイント・シグナル,COLORFUL FE@THERS -Stella-,2021/01/20,月岡恋鐘,2020/12/28,2023/11/14,,,,,,,,,,,
+49,チョコデート・サンデー,COLORFUL FE@THERS -Stella-,2021/01/20,園田智代子,2020/12/22,2024/02/14,,,,,,,,,,,
+50,Sweet Memories,COLORFUL FE@THERS -Stella-,2021/01/20,大崎甘奈,2020/12/25,2023/11/14,,,,,,,,,,,
+51,ハナマルバッジ,COLORFUL FE@THERS -Stella-,2021/01/20,小宮果穂,2020/12/28,2023/11/14,,,,,,,,,,,
+52,リフレクトサイン,COLORFUL FE@THERS -Luna-,2021/02/17,Team.Luna,2021/02/04,,,,,,,,,-SOLO PERFORMANCE LIVE 我儘なまま Luna-,2023/07/22,,
+53,誰ソ彼アイデンティティー,COLORFUL FE@THERS -Luna-,2021/02/17,田中摩美々,2021/01/12,2024/06/20,,,,,,,,,,,
+54,わたしの主人公はわたしだから！,COLORFUL FE@THERS -Luna-,2021/02/17,福丸小糸,2021/01/19,2025/03/21,,,,,,,,,,,
+55,また明日,COLORFUL FE@THERS -Luna-,2021/02/17,大崎甜花,2021/01/12,2024/08/21,,,,,,,,,,,
+56,常咲の庭,COLORFUL FE@THERS -Luna-,2021/02/17,杜野凛世,2021/01/23,2024/01/19,,,,,,,,,,,
+57,プラスチック・アンブレラ,COLORFUL FE@THERS -Luna-,2021/02/17,三峰結華,2021/01/16,2024/10/21,,,,,,,,,,,
+58,Going my way,COLORFUL FE@THERS -Luna-,2021/02/17,和泉愛依,2021/01/31,2024/12/20,,,,,,,,,,,
+59,雪・月・風・花,COLORFUL FE@THERS -Luna-,2021/02/17,幽谷霧子,2021/01/27,2024/04/19,,,,,,,,,,,
+60,スローモーション,COLORFUL FE@THERS -Luna-,2021/02/17,風野灯織,2021/01/31,2025/06/20,,,,,,,,,,,
+61,千夜アリア,COLORFUL FE@THERS -Sol-,2021/03/10,白瀬咲耶,2021/02/28,2025/04/21,,,,,,,,,,,
+62,Damascus Cocktail,COLORFUL FE@THERS -Sol-,2021/03/10,有栖川夏葉,2021/02/08,2025/01/20,,,,,,,,,,,
+63,Darling you!,COLORFUL FE@THERS -Sol-,2021/03/10,桑山千雪,2021/02/28,2024/03/19,,,,,,,,,,,
+64,あおぞらサイダー,COLORFUL FE@THERS -Sol-,2021/03/10,市川雛菜,2021/02/12,2024/09/20,,,,,,,,,,,
+65,SOS,COLORFUL FE@THERS -Sol-,2021/03/10,黛冬優子,2021/02/20,2023/12/15,,,,,,,,,,,
+66,過純性ブリーチ,COLORFUL FE@THERS -Sol-,2021/03/10,西城樹里,2021/02/24,2025/07/20,,,,,,,,,,,
+67,HAREBARE!!,COLORFUL FE@THERS -Sol-,2021/03/10,八宮めぐる,2021/02/08,2024/05/24,,,,,,,,,,,
+68,statice,COLORFUL FE@THERS -Sol-,2021/03/10,浅倉透,2021/02/16,2023/11/14,,,,,,,,,,,
+69,SOLAR WAY,COLORFUL FE@THERS -Sol-,2021/03/10,Team.Sol,2021/03/05,,,,,,,,,-SOLO PERFORMANCE LIVE 我儘なまま Sol-,2023/07/22,,
+70,Resonance⁺,L@YERED WING 01,2021/04/14,シャイニーカラーズ,2021/03/21,2026/05/09,,,2026/05/09,2026/5/31,既存4週目,2026/5/31,,,,L@YERED WING 各ユニット盤（3曲目・各ユニットVer.）,
+71,Color Days,L@YERED WING 01,2021/04/14,シャイニーカラーズ,2021/04/04,2026/06/20,,,,,既存4週目,,,,,,
+72,PRISISM,L@YERED WING 02,2021/05/19,イルミネーションスターズ,2021/04/25,2025/10/10,,,,,既存4週目,,,-L@YERED WING part 1-,2022/02/14,,
+73,スマイルシンフォニア,L@YERED WING 02,2021/05/19,イルミネーションスターズ,2021/05/06,2025/10/21,,,,,既存2DMV1週目,,,-L@YERED WING part 2-,2022/02/14,,
+74,abyss of conflict,L@YERED WING 03,2021/06/09,アンティーカ,2021/05/10,2026/03/10,,,,,既存4週目,,,-L@YERED WING part 1-,2022/02/14,,
+75,革命進化論,L@YERED WING 03,2021/06/09,アンティーカ,2021/05/24,,,,,,,,,-L@YERED WING part 2-,2022/02/14,,
+76,クライマックスアイランド,L@YERED WING 04,2021/07/14,放課後クライマックスガールズ,2021/06/21,2025/08/11,,,,,既存4週目,,,-L@YERED WING part 1-,2022/02/14,,
+77,拝啓タイムカプセル,L@YERED WING 04,2021/07/14,放課後クライマックスガールズ,2021/06/28,,,,,,,,,-L@YERED WING part 2-,2022/02/14,,
+78,VOY@GER,VOY@GER,2021/08/04,有栖川夏葉;黛冬優子;浅倉透,,2024/02/26,,2026/01/21,2024/02/26,2026/1/21,,,,,,,VOY@GER：初収録CDにキャラクターVer.収録
+79,パステルカラー パスカラカラー,L@YERED WING 05,2021/08/18,アルストロメリア,2021/07/19,2025/09/10,,,,,既存4週目,,,-L@YERED WING part 1-,2022/02/14,,
+80,ラブ・ボナペティート,L@YERED WING 05,2021/08/18,アルストロメリア,2021/07/31,,,,,,,,,-L@YERED WING part 2-,2022/02/14,,
+81,Another Rampage,L@YERED WING 06,2021/09/08,ストレイライト,2021/08/10,2025/03/10,2026/05/20,,,,,,,-L@YERED WING part 1-,2022/02/14,,
+82,Timeless Shooting Star,L@YERED WING 06,2021/09/08,ストレイライト,2021/08/20,2025/04/10,,,,,既存2DMV1週目,,,-L@YERED WING part 2-,2022/02/14,,
+83,僕らだけの未来の空,L@YERED WING 07,2021/10/13,ノクチル,2021/09/10,2024/04/09,,2026/01/21,2024/8/9,,既存2週目,,,-L@YERED WING part 1-,2022/02/14,,
+84,今しかない瞬間を,L@YERED WING 07,2021/10/13,ノクチル,2021/09/21,,,,,,,,,-L@YERED WING part 2-,2022/02/14,,
+85,OH MY GOD,L@YERED WING 08,2021/11/10,シーズ,2021/04/08,2023/11/14,,,2024/5/14,,既存1週目,,,-L@YERED WING part 1-,2022/02/14,,
+86,Fly and Fly,L@YERED WING 08,2021/11/10,シーズ,2021/09/25,2025/09/20,,,,,既存2DMV1週目,,,-L@YERED WING part 2-,2022/02/14,,
+87,虹の行方,PANOR@MA WING 01,2022/04/13,シャイニーカラーズ,2022/03/19,,,,,,,,,,,PANOR@MA WING 各ユニット盤（3曲目・各ユニットVer.）,
+88,Daybreak Age,PANOR@MA WING 01,2022/04/13,シャイニーカラーズ,2022/03/29,,,,,,,,,,,,
+89,Killer×Mission,Synse-Side 01,2022/04/23,アンティーカ;ストレイライト,2022/03/10,,,,,,,,,,,,Synse-Side 01：初収録CDにキャラクターVer.収録
+90,相合学舎,Synse-Side 02,2022/04/23,放課後クライマックスガールズ;ノクチル,2022/02/28,,,,,,,,,,,,Synse-Side 02：初収録CDにキャラクターVer.収録
+91,Secret utopIA,Synse-Side 03,2022/04/23,イルミネーションスターズ;アルストロメリア;シーズ,2022/02/19,,,,,,,,,,,,Synse-Side 03：初収録CDにキャラクターVer.収録
+92,FELICE,PANOR@MA WING 02,2022/05/11,イルミネーションスターズ,2022/04/25,,,,,,既存5週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+93,イルミネイトコンサート,PANOR@MA WING 02,2022/05/11,イルミネーションスターズ,2022/04/30,,,,,,,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
+94,浮動性イノセンス,PANOR@MA WING 03,2022/06/15,アンティーカ,2022/05/20,,,,,,既存5週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+95,愚者の独白,PANOR@MA WING 03,2022/06/15,アンティーカ,2022/05/30,,,,,,,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
+96,一閃は君が導く,PANOR@MA WING 04,2022/07/13,放課後クライマックスガールズ,2022/06/20,,,,,,既存5週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+97,キャットスクワッド,PANOR@MA WING 04,2022/07/13,放課後クライマックスガールズ,2022/06/27,,,,,,,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
+98,VERY BERRY LOVE,PANOR@MA WING 05,2022/08/10,アルストロメリア,2022/07/21,2026/06/30,,,,,既存5週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+99,Give me some more...,PANOR@MA WING 05,2022/08/10,アルストロメリア,2022/07/29,2025/04/21,,,,,既存2DMV1週目,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
 100,283体操,B☆Health,2022/08/13,"八宮めぐる;月岡恋鐘;西城樹里;桑山千雪
-;芹沢あさひ;福丸小糸;七草にちか"
+;芹沢あさひ;福丸小糸;七草にちか",,,,,,,,,,,,,
 101,シャイニーエクササイズ,B☆Health,2022/08/13,"八宮めぐる;月岡恋鐘;西城樹里;桑山千雪
-;芹沢あさひ;福丸小糸;七草にちか"
-102,Tracing Defender,PANOR@MA WING 06,2022/09/14,ストレイライト
-103,Overdrive Emotion,PANOR@MA WING 06,2022/09/14,ストレイライト
-104,Catch the Breeze,PANOR@MA WING 07,2022/10/12,ノクチル
-105,アスファルトを鳴らして,PANOR@MA WING 07,2022/10/12,ノクチル
-106,Fashionable,PANOR@MA WING 08,2022/11/16,シーズ
-107,Bouncy Girl,PANOR@MA WING 08,2022/11/16,シーズ
-108,Forward March！！！, “CANVAS” 01,2023/04/12,イルミネーションスターズ
-109,星が流れて, “CANVAS” 01,2023/04/12,イルミネーションスターズ
-110,BRIGHTEST WHITE, “CANVAS” 01,2023/04/12,イルミネーションスターズ
-111,とある英雄たちの物語, “CANVAS” 02,2023/05/10,アンティーカ
-112,Unsung Heroes, “CANVAS” 02,2023/05/10,アンティーカ
-113,有彩色ユリイカ, “CANVAS” 02,2023/05/10,アンティーカ
-114,ハナサカサイサイ, “CANVAS” 03,2023/06/14,放課後クライマックスガールズ
-115,全力アンサー, “CANVAS” 03,2023/06/14,放課後クライマックスガールズ
-116,ひめくりモザイク, “CANVAS” 03,2023/06/14,放課後クライマックスガールズ
-117,メッセージ, “CANVAS” 04,2023/07/12,アルストロメリア
-118,Love Letter, “CANVAS” 04,2023/07/12,アルストロメリア
-119,グラデーション, “CANVAS” 04,2023/07/12,アルストロメリア
-120,フェアリーガール,COLORFUL FE@THERS -SHHis-,2023/07/26,七草にちか
-121,Look up to the sky,COLORFUL FE@THERS -SHHis-,2023/07/26,緋田美琴
-122,Shiny Stories,Shiny Stories,2023/07/26,櫻木真乃;七草にちか;斑鳩ルカ
-123,Imitation Ghost, “CANVAS” 05,2023/08/09,ストレイライト
-124,BURN BURN, “CANVAS” 05,2023/08/09,ストレイライト
-125,Start up Stand up, “CANVAS” 05,2023/08/09,ストレイライト
-126,Reflection, “CANVAS” 06,2023/09/13,ノクチル
-127,夢が夢じゃなくなるその日まで, “CANVAS” 06,2023/09/13,ノクチル
-128,青とオレンジ, “CANVAS” 06,2023/09/13,ノクチル
-129,Forbidden Paradise, “CANVAS” 07,2023/10/11,シーズ
-130,SWEETEST BITE, “CANVAS” 07,2023/10/11,シーズ
-131,White Story, “CANVAS” 07,2023/10/11,シーズ
-132,星の声,Song for Prism 星の声,2023/10/18,シャイニーカラーズ
-133,無自覚アプリオリ, “CANVAS” 08,2023/11/08,コメティック
-134,くだらないや, “CANVAS” 08,2023/11/08,コメティック
-135,平行線の美学, “CANVAS” 08,2023/11/08,コメティック
-136,裸足じゃイラレナイ,Song for Prism 裸足じゃイラレナイ / 明日もBeautiful Day,2024/01/24,放課後クライマックスガールズ
-137,明日もBeautiful Day,Song for Prism 裸足じゃイラレナイ / 明日もBeautiful Day,2024/01/24,アルストロメリア
-138,ホムラインビテーション,ホムラインビテーション,2024/02/23,ストレイライト;シーズ
-139,青空,Song for Prism ハナムケのハナタバ / 青空,2024/04/03,ノクチル
-140,ハナムケのハナタバ,Song for Prism ハナムケのハナタバ / 青空,2024/04/03,コメティック
-141,ツバサグラビティ,アニメ　ツバサグラビティ,2024/04/10,シャイニーカラーズ
-142,輝きにかわる,シャイニーPRオファー vol.1,2024/04/17,大崎甘奈;市川雛菜;田中摩美々
-143,ONE STAR,シャイニーPRオファー vol.2,2024/04/17,小宮果穂;黛冬優子;和泉愛依
-144,GOTCHA,シャイニーPRオファー vol.3,2024/04/17,芹沢あさひ;八宮めぐる;西城樹里
-145,枕木の歌,Song for Prism Happier / 枕木の歌,2024/05/22,イルミネーションスターズ
-146,Happier,Song for Prism Happier / 枕木の歌,2024/05/22,シーズ
-147,文明開花輪舞 -シティ・ハレルヤ-,ECHOES 02,2024/06/12,アンティーカ
-148,秋の終わり、僕の記憶,ECHOES 02,2024/06/12,アンティーカ
-149,放課後マギア,ECHOES 03,2024/07/10,放課後クライマックスガールズ
-150,パーティーマジックデザイナー,ECHOES 03,2024/07/10,放課後クライマックスガールズ
-151,時限式狂騒ワンダーランド,Song for Prism 時限式狂騒ワンダーランド / LINKs ,2024/07/24,アンティーカ
-152,LINKs,Song for Prism 時限式狂騒ワンダーランド / LINKs ,2024/07/24,ストレイライト
-153,アスタラブビスタ,ECHOES 04,2024/08/07,アルストロメリア
-154,DAYDREAM LOVE,ECHOES 04,2024/08/07,アルストロメリア
-155,Cyber Parkour,ECHOES 05,2024/09/11,ストレイライト
-156,LIVE LIVE LIVE!,ECHOES 05,2024/09/11,ストレイライト
-157,想像のつばさ,アニメアソビストア特装版 Blu-ray COMPLETE BOX,2024/09/20,櫻木真乃
-158,mellow mellow,Song for Prism After Run / mellow mellow,2024/09/25,アルストロメリア
-159,After Run,Song for Prism After Run / mellow mellow,2024/09/25,シーズ
-160,いつかのキミへ,ECHOES 06,2024/10/09,ノクチル
-161,365日のストーリー,ECHOES 06,2024/10/09,ノクチル
-162,プリズムフレア,アニメ　プリズムフレア,2024/10/09,シャイニーカラーズ
-163,ねぇ、ねぇ、ねぇ,アニメ　Happy Surprise Trick!,2024/10/30,櫻木真乃;幽谷霧子;園田智代子;桑山千雪;黛冬優子
-164,OPEN the New world,アニメ　Happy Surprise Trick!,2024/10/30,風野灯織;月岡恋鐘;有栖川夏葉;芹沢あさひ
-165,Midnight parade!,アニメ　Happy Surprise Trick!,2024/10/30,田中摩美々;白瀬咲耶;杜野凛世;大崎甜花;和泉愛依
-166,CANDY UNIVERSE,アニメ　Happy Surprise Trick!,2024/10/30,八宮めぐる;三峰結華;小宮果穂;西城樹里;大崎甘奈
-167,Poison Berry Daughters,アニメ　Happy Surprise Trick!,2024/10/30,シャイニーカラーズ
-168,Monochromatic,ECHOES 07,2024/11/13,シーズ
-169,Snowflake,ECHOES 07,2024/11/13,シーズ
-170,C'mon! Join Us,Song for Prism C’mon! Join Us / 愛なView / サマーサマーオーシャンパーリィバケーション,2024/11/20,シャイニーカラーズ
-171,愛なView,Song for Prism C’mon! Join Us / 愛なView / サマーサマーオーシャンパーリィバケーション,2024/11/20,シャイニーカラーズ
-172,サマーサマーオーシャンパーリィバケーション,Song for Prism C’mon! Join Us / 愛なView / サマーサマーオーシャンパーリィバケーション,2024/11/20,八宮めぐる;三峰結華;小宮果穂;大崎甜花;黛冬優子;福丸小糸;緋田美琴;郁田はるき
-173,グッバイ,Song for Prism Heads or Tails？ / グッバイ,2024/11/27,ノクチル
-174,Heads or Tails？,Song for Prism Heads or Tails？ / グッバイ,2024/11/27,コメティック
-175,神様は死んだ、って,COLORFUL FE@THERS -CoMETIK-,2024/12/04,斑鳩ルカ
-176,無垢,COLORFUL FE@THERS -CoMETIK-,2024/12/04,鈴木羽那
-177,夢模様キャンバス,COLORFUL FE@THERS -CoMETIK-,2024/12/04,郁田はるき
-178,1/3,COLORFUL FE@THERS -CoMETIK-,2024/12/04,斑鳩ルカ
-179,泥濘鳴鳴,ECHOES 08,2024/12/11,コメティック
-180,Clean.Clean up,ECHOES 08,2024/12/11,コメティック
-181,アイ NEED YOU（FOR WONDERFUL STORY）,アイ NEED YOU（FOR WONDERFUL STORY）,2024/12/11,櫻木真乃;風野灯織;八宮めぐる
-182,星の数だけ,アニメ　Over the prism,2024/12/25,イルミネーションスターズ
-183,橙より未来,アニメ　Over the prism,2024/12/25,アンティーカ
-184,さあ舞い上がれ,アニメ　Over the prism,2024/12/25,放課後クライマックスガールズ
-185,With you,アニメ　Over the prism,2024/12/25,アルストロメリア
-186,Future Designer,アニメ　Over the prism,2024/12/25,ストレイライト
-187,未来へのSign,アニメ　Over the prism,2024/12/25,ノクチル
-188,STARRY PLACE,ECHOES 01,2025/01/22,イルミネーションスターズ
-189,晴れのちバルーン,ECHOES 01,2025/01/22,イルミネーションスターズ
-190,Migratory Echoes,ECHOES 09,2025/01/22,シャイニーカラーズ
-191,Migratory Echoes (イルミネーションスターズ Ver.),ECHOES 09,2025/01/22,イルミネーションスターズ
-192,Migratory Echoes (アンティーカ Ver.),ECHOES 09,2025/01/22,アンティーカ
-193,Migratory Echoes (放課後クライマックスガールズ Ver.),ECHOES 09,2025/01/22,放課後クライマックスガールズ
-194,Migratory Echoes (アルストロメリア Ver.),ECHOES 09,2025/01/22,アルストロメリア
-195,Migratory Echoes (ストレイライト Ver.),ECHOES 09,2025/01/22,ストレイライト
-196,Migratory Echoes (ノクチル Ver.),ECHOES 09,2025/01/22,ノクチル
-197,Migratory Echoes (シーズ Ver.),ECHOES 09,2025/01/22,シーズ
-198,Migratory Echoes (コメティック Ver.),ECHOES 09,2025/01/22,コメティック
-199,Shower of light,Song for Prism Shower of light / 快盗Vを見逃すな,2025/01/29,イルミネーションスターズ
-200,快盗Vを見逃すな,Song for Prism Shower of light / 快盗Vを見逃すな,2025/01/29,放課後クライマックスガールズ
-201,THE LAST PRIDE,Song for Prism Real Mind Shakes / THE LAST PRIDE,2025/03/26,アンティーカ
-202,Real Mind Shakes,Song for Prism Real Mind Shakes / THE LAST PRIDE,2025/03/26,ストレイライト
-203,Pioneer Impact,"""円環 -Halo around-"" 01",2025/06/04,アンティーカ;シーズ
-204,ブレイク・アウト・セレンディピティ,"""円環 -Halo around-"" 01",2025/06/04,アンティーカ
-205,Break Chain,"""円環 -Halo around-"" 01",2025/06/04,シーズ
-206,迅雷鉄火,"""円環 -Halo around-"" 02",2025/07/02,放課後クライマックスガールズ;ストレイライト
-207,進路は超銀河,"""円環 -Halo around-"" 02",2025/07/02,放課後クライマックスガールズ
-208,GET OVER,"""円環 -Halo around-"" 02",2025/07/02,ストレイライト
-209,リフレインブレイン,"""円環 -Halo around-"" 03",2025/08/06,アルストロメリア;コメティック
-210,ルピラ,"""円環 -Halo around-"" 03",2025/08/06,アルストロメリア
-211,似セ者,"""円環 -Halo around-"" 03",2025/08/06,コメティック
-212,愛しき日々,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,ノクチル
-213,Future Transit,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,ストレイライト
-214,Fading Stars,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,シーズ
-215,KoiKyun！,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,イルミネーションスターズ
-216,Sparkle,"""円環 -Halo around-"" 04",2025/09/10,イルミネーションスターズ;ノクチル
-217,REWRITING,"""円環 -Halo around-"" 04",2025/09/10,イルミネーションスターズ
-218,Swing it!,"""円環 -Halo around-"" 04",2025/09/10,ノクチル
-219,Borderline,Song for Prism BorderLine / クローバー / Summer Night Paradise,2025/12/24,シャイニーカラーズ
-220,クローバー,Song for Prism BorderLine / クローバー / Summer Night Paradise,2025/12/24,杜野凛世;大崎甘奈;市川雛菜;七草にちか
-221,Summer Night Paradise,Song for Prism BorderLine / クローバー / Summer Night Paradise,2025/12/24,櫻木真乃;田中摩美々;有栖川夏葉;桑山千雪;和泉愛依;樋口円香;緋田美琴;鈴木羽那
-222,カウントダウンラブ,Song for Prism カウントダウンラブ / KAWAII♡めたもる交響曲,2026/01/07,I’m a Cutie Finder
-223,KAWAII♡めたもる交響曲,Song for Prism カウントダウンラブ / KAWAII♡めたもる交響曲,2026/01/07,I’m a Cutie Finder
-224,乱舞る,乱舞る / 疾風ザブングル,2026/01/14,放課後クライマックスガールズ
-225,QUEEN OF THE PIRATES,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,アンティーカ
-226,キラピコ.exe,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,放課後クライマックスガールズ
-227,Sleepless Nights,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,アルストロメリア
-228,アイノウ,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,コメティック
-229,Karma,Song for Prism Karma / Naraku,2026/02/04,Fumage
-230,Naraku,Song for Prism Karma / Naraku,2026/02/04,Fumage
-231,感謝のコントレイル,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,シャイニーカラーズ
-232,キズナシェアリング,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,Team.Stella
-233,Lit up my sky,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,Team.Luna
-234,永遠色アーチ,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,Team.Sol
-235,ボーダーレス・ノンストレス,Song for Prism ボーダーレス・ノンストレス / Oh Yeah!!,2026/03/04,Sonic Heart (and Signal)
-236,Oh Yeah!!,Song for Prism ボーダーレス・ノンストレス / Oh Yeah!!,2026/03/04,Sonic Heart (and Signal)
-237,銀翼のアレジアンス -blade of truth-,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,アンティーカ;シーズ;コメティック
-238,メモワール・アンタクト,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,幽谷霧子
-239,運命前夜,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,アンティーカ;シーズ;コメティック
-240,月影のアンシェネ,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,田中摩美々
-241,Once Upon a Secret,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,三峰結華
-242,銀翼のアヴニール -become the brave-,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,アンティーカ;シーズ;コメティック
-243,SUPER DUPER DREAMER, Song for Prism SUPER DUPER DREAMER / BEAST MODE,2026/04/01,Σ Desire
-244,BEAST MODE, Song for Prism SUPER DUPER DREAMER / BEAST MODE,2026/04/01,Σ Desire
-245,One Live One Love,XXX= S/N-GUL4R1TY MUSIC COLLECTION,2026/04/22,ストレイライト
-246,One Live One Love (Mortal Remix),XXX= S/N-GUL4R1TY MUSIC COLLECTION,2026/04/22,ストレイライト
-247,Ring Ring Ringの魔法,Song for Prism Ring Ring Ringの魔法 / 街角メランコリー,2026/04/29,ザ・ふたりトラベラー
-248,街角メランコリー,Song for Prism Ring Ring Ringの魔法 / 街角メランコリー,2026/04/29,ザ・ふたりトラベラー
-249,散花-sanka-,Song for Prism 散花-sanka- / 紅花-benibana-,2026/06/03,彼岸流
-250,紅花-benibana-,Song for Prism 散花-sanka- / 紅花-benibana-,2026/06/03,彼岸流
-251,Tokyo自由系*ガール,Song for Prism Tokyo自由系*ガール / My time,2026/07/01,No 1 feel alone
-252,My time,Song for Prism Tokyo自由系*ガール / My time,2026/07/01,No 1 feel alone
+;芹沢あさひ;福丸小糸;七草にちか",,,,,,,,,,,,,
+102,Tracing Defender,PANOR@MA WING 06,2022/09/14,ストレイライト,2022/08/13,2026/04/10,,,,,既存4週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+103,Overdrive Emotion,PANOR@MA WING 06,2022/09/14,ストレイライト,2022/08/31,,,,,,,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
+104,Catch the Breeze,PANOR@MA WING 07,2022/10/12,ノクチル,2022/09/19,2025/01/10,,,,,既存3週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+105,アスファルトを鳴らして,PANOR@MA WING 07,2022/10/12,ノクチル,2022/09/29,2025/06/25,,,,,既存2DMV1週目,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
+106,Fashionable,PANOR@MA WING 08,2022/11/16,シーズ,2022/10/22,2024/05/10,2026/05/20,2026/01/21,2024/11/10,,既存2週目,,,-5thLIVE If I_wings. part1-,2023/03/18,,
+107,Bouncy Girl,PANOR@MA WING 08,2022/11/16,シーズ,2022/10/31,,,,,,,,,-5thLIVE If I_wings. Part2-,2023/03/18,,
+108,Forward March！！！,“CANVAS” 01,2023/04/12,イルミネーションスターズ,2023/03/20,,,,,,既存6週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+109,星が流れて,“CANVAS” 01,2023/04/12,イルミネーションスターズ,2023/03/27,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+110,BRIGHTEST WHITE,“CANVAS” 01,2023/04/12,イルミネーションスターズ,2023/03/30,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+111,とある英雄たちの物語,“CANVAS” 02,2023/05/10,アンティーカ,2023/04/12,,,,,,既存6週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+112,Unsung Heroes,“CANVAS” 02,2023/05/10,アンティーカ,2023/04/21,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+113,有彩色ユリイカ,“CANVAS” 02,2023/05/10,アンティーカ,2023/04/30,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+114,ハナサカサイサイ,“CANVAS” 03,2023/06/14,放課後クライマックスガールズ,2023/05/11,,,,,,既存6週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+115,全力アンサー,“CANVAS” 03,2023/06/14,放課後クライマックスガールズ,2023/05/22,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+116,ひめくりモザイク,“CANVAS” 03,2023/06/14,放課後クライマックスガールズ,2023/05/31,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+117,メッセージ,“CANVAS” 04,2023/07/12,アルストロメリア,2023/06/09,,,,,,既存6週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+118,Love Letter,“CANVAS” 04,2023/07/12,アルストロメリア,2023/06/20,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+119,グラデーション,“CANVAS” 04,2023/07/12,アルストロメリア,2023/06/30,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+120,フェアリーガール,COLORFUL FE@THERS -SHHis-,2023/07/26,七草にちか,2023/07/22,2023/11/14,,,,,,,,,,,
+121,Look up to the sky,COLORFUL FE@THERS -SHHis-,2023/07/26,緋田美琴,2023/07/22,2024/07/19,,,,,,,,,,,
+122,Shiny Stories,Shiny Stories,2023/07/26,櫻木真乃;七草にちか;斑鳩ルカ,2023/04/20,,,,,,,,,,,,
+123,Imitation Ghost,“CANVAS” 05,2023/08/09,ストレイライト,2023/07/10,,,,,,既存5週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+124,BURN BURN,“CANVAS” 05,2023/08/09,ストレイライト,2023/07/23,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+125,Start up Stand up,“CANVAS” 05,2023/08/09,ストレイライト,2023/07/31,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+126,Reflection,“CANVAS” 06,2023/09/13,ノクチル,2023/08/09,2026/02/10,,,,,既存4週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+127,夢が夢じゃなくなるその日まで,“CANVAS” 06,2023/09/13,ノクチル,2023/08/21,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+128,青とオレンジ,“CANVAS” 06,2023/09/13,ノクチル,2023/08/31,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+129,Forbidden Paradise,“CANVAS” 07,2023/10/11,シーズ,2023/09/11,2025/07/10,,,,,既存3週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+130,SWEETEST BITE,“CANVAS” 07,2023/10/11,シーズ,2023/09/21,,,,,,,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+131,White Story,“CANVAS” 07,2023/10/11,シーズ,2023/09/30,,,,,,,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+132,星の声,Song for Prism 星の声,2023/10/18,シャイニーカラーズ,,2023/11/14,,2026/01/21,2023/11/14,2026/3/20,新曲1週目,2026/5/31,,,,,
+133,無自覚アプリオリ,“CANVAS” 08,2023/11/08,コメティック,2023/10/21,2023/11/14,,,2024/5/14,,既存1週目,,,-6thLIVE TOUR Come and Unite! part1-,2024/03/02,,
+134,くだらないや,“CANVAS” 08,2023/11/08,コメティック,2023/10/21,2024/06/10,,2026/01/21,2024/11/10,,既存2週目,,,-6thLIVE TOUR Come and Unite! part2-,2024/03/02,,
+135,平行線の美学,“CANVAS” 08,2023/11/08,コメティック,2023/10/21,2025/06/29,,,,,既存2DMV1週目,,,-6thLIVE TOUR Come and Unite! part3-,2024/03/02,,
+136,裸足じゃイラレナイ,Song for Prism 裸足じゃイラレナイ / 明日もBeautiful Day,2024/01/24,放課後クライマックスガールズ,,2023/11/15,,2026/06/20,2025/05/08,2026/7/21,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+137,明日もBeautiful Day,Song for Prism 裸足じゃイラレナイ / 明日もBeautiful Day,2024/01/24,アルストロメリア,,2023/11/30,,2026/06/20,2025/05/08,2026/7/21,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+138,ホムラインビテーション,ホムラインビテーション,2024/02/23,ストレイライト;シーズ,2023/12/20,,,,,,,,,,,,
+139,青空,Song for Prism ハナムケのハナタバ / 青空,2024/04/03,ノクチル,,2024/01/31,,2026/06/20,2025/05/08,2026/7/21,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+140,ハナムケのハナタバ,Song for Prism ハナムケのハナタバ / 青空,2024/04/03,コメティック,,2023/12/31,,2026/06/20,2025/05/08,2025/12/18,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+141,ツバサグラビティ,アニメ　ツバサグラビティ,2024/04/10,シャイニーカラーズ,2024/04/10,2023/11/15,,,2023/11/15,,,,,-Beyond the Blue sky part1-,2024/07/24,,
+142,輝きにかわる,シャイニーPRオファー vol.1,2024/04/17,大崎甘奈;市川雛菜;田中摩美々,2024/01/30,2024/05/01,,,,,,,,,,,シャイニーPRオファー vol.1：初収録CDにキャラクターVer.収録
+143,ONE STAR,シャイニーPRオファー vol.2,2024/04/17,小宮果穂;黛冬優子;和泉愛依,2024/02/28,2024/05/02,,,,,,,,,,,シャイニーPRオファー vol.2：初収録CDにキャラクターVer.収録
+144,GOTCHA,シャイニーPRオファー vol.3,2024/04/17,芹沢あさひ;八宮めぐる;西城樹里,2024/03/29,2024/05/03,,,,,,,,,,,シャイニーPRオファー vol.3：初収録CDにキャラクターVer.収録
+145,枕木の歌,Song for Prism Happier / 枕木の歌,2024/05/22,イルミネーションスターズ,,2024/03/31,,2026/01/21,2025/05/21,2026/7/21,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+146,Happier,Song for Prism Happier / 枕木の歌,2024/05/22,シーズ,,2024/02/29,,2026/06/20,2025/05/21,2025/12/18,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+147,文明開花輪舞 -シティ・ハレルヤ-,ECHOES 02,2024/06/12,アンティーカ,2024/05/09,,,,,,既存7週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+148,秋の終わり、僕の記憶,ECHOES 02,2024/06/12,アンティーカ,2024/05/21,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+149,放課後マギア,ECHOES 03,2024/07/10,放課後クライマックスガールズ,2024/06/07,,,,,,既存7週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+150,パーティーマジックデザイナー,ECHOES 03,2024/07/10,放課後クライマックスガールズ,2024/06/19,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+151,時限式狂騒ワンダーランド,Song for Prism 時限式狂騒ワンダーランド / LINKs,2024/07/24,アンティーカ,,2024/04/30,,2026/01/21,2025/05/21,2025/12/18,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+152,LINKs,Song for Prism 時限式狂騒ワンダーランド / LINKs,2024/07/24,ストレイライト,,2024/05/31,,2026/01/21,2025/05/21,2025/12/18,新曲1週目,,,-6.5th Anniversary LIVE “Chapter 283”-,2024/10/05,,
+153,アスタラブビスタ,ECHOES 04,2024/08/07,アルストロメリア,2024/07/09,,,,,,既存7週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+154,DAYDREAM LOVE,ECHOES 04,2024/08/07,アルストロメリア,2024/07/18,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+155,Cyber Parkour,ECHOES 05,2024/09/11,ストレイライト,2024/08/07,,,,,,既存6週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+156,LIVE LIVE LIVE!,ECHOES 05,2024/09/11,ストレイライト,2024/08/19,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+157,想像のつばさ,アニメアソビストア特装版 Blu-ray COMPLETE BOX,2024/09/20,櫻木真乃,,,,,,,,,,,,,
+158,mellow mellow,Song for Prism After Run / mellow mellow,2024/09/25,アルストロメリア,,2024/07/31,,2026/03/20,2025/09/10,2025/12/18,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+159,After Run,Song for Prism After Run / mellow mellow,2024/09/25,シーズ,,2024/06/30,,2026/03/20,2025/09/10,,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+160,いつかのキミへ,ECHOES 06,2024/10/09,ノクチル,2024/09/09,,,,,,既存5週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+161,365日のストーリー,ECHOES 06,2024/10/09,ノクチル,2024/09/18,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+162,プリズムフレア,アニメ　プリズムフレア,2024/10/09,シャイニーカラーズ,2024/10/05,2024/10/05,,,2025/03/02,2025/12/18,,,,-2nd season LIVE Over the prism part1-,2025/03/01,,
+163,ねぇ、ねぇ、ねぇ,アニメ　Happy Surprise Trick!,2024/10/30,櫻木真乃;幽谷霧子;園田智代子;桑山千雪;黛冬優子,2024/10/26,2024/10/27,,,,,,,,-2nd season LIVE Over the prism part3-,2025/03/01,,
+164,OPEN the New world,アニメ　Happy Surprise Trick!,2024/10/30,風野灯織;月岡恋鐘;有栖川夏葉;芹沢あさひ,2024/10/26,2024/10/28,,,,,,,,-2nd season LIVE Over the prism part3-,2025/03/01,,
+165,Midnight parade!,アニメ　Happy Surprise Trick!,2024/10/30,田中摩美々;白瀬咲耶;杜野凛世;大崎甜花;和泉愛依,2024/10/26,2024/10/29,,,,,,,,-2nd season LIVE Over the prism part3-,2025/03/01,,
+166,CANDY UNIVERSE,アニメ　Happy Surprise Trick!,2024/10/30,八宮めぐる;三峰結華;小宮果穂;西城樹里;大崎甘奈,2024/10/26,2024/10/30,,,,,,,,-2nd season LIVE Over the prism part3-,2025/03/01,,
+167,Poison Berry Daughters,アニメ　Happy Surprise Trick!,2024/10/30,シャイニーカラーズ,2024/10/26,2024/10/26,,,2024/10/26,2026/1/21,,,,-2nd season LIVE Over the prism part4-,2025/03/01,,
+168,Monochromatic,ECHOES 07,2024/11/13,シーズ,2024/10/05,2026/01/10,,,,,既存4週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+169,Snowflake,ECHOES 07,2024/11/13,シーズ,2024/10/18,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+170,C'mon! Join Us,Song for Prism C’mon! Join Us / 愛なView / サマーサマーオーシャンパーリィバケーション,2024/11/20,シャイニーカラーズ,,2024/11/10,,2026/01/21,2024/11/9,,新曲2週目,,,,,,
+171,愛なView,Song for Prism C’mon! Join Us / 愛なView / サマーサマーオーシャンパーリィバケーション,2024/11/20,シャイニーカラーズ,,2024/11/14,,2026/06/20,2024/11/14,,新曲2週目,,,,,,
+172,サマーサマーオーシャンパーリィバケーション,Song for Prism C’mon! Join Us / 愛なView / サマーサマーオーシャンパーリィバケーション,2024/11/20,八宮めぐる;三峰結華;小宮果穂;大崎甜花;黛冬優子;福丸小糸;緋田美琴;郁田はるき,,2024/08/01,,,2025/10/21,2026/1/21,新曲2週目,,,-シャニマス大感謝祭！ 〜283スポーツフェスティバル〜 part2-,2026/02/14,,
+173,グッバイ,Song for Prism Heads or Tails？ / グッバイ,2024/11/27,ノクチル,,2024/09/30,,2026/03/20,2025/09/20,,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+174,Heads or Tails？,Song for Prism Heads or Tails？ / グッバイ,2024/11/27,コメティック,,2024/08/31,,2026/03/20,2025/09/20,,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+175,神様は死んだ、って,COLORFUL FE@THERS -CoMETIK-,2024/12/04,斑鳩ルカ,2021/12/19,2023/11/14,,,,,,,,,,,
+176,無垢,COLORFUL FE@THERS -CoMETIK-,2024/12/04,鈴木羽那,2025/02/12,2024/11/21,,,,,,,,,,,
+177,夢模様キャンバス,COLORFUL FE@THERS -CoMETIK-,2024/12/04,郁田はるき,2024/12/13,2025/05/16,,,,,,,,,,,
+178,1/3,COLORFUL FE@THERS -CoMETIK-,2024/12/04,斑鳩ルカ,2025/04/15,2025/08/20,,,,,,,,,,,
+179,泥濘鳴鳴,ECHOES 08,2024/12/11,コメティック,2024/11/08,2025/05/21,,,,,既存3週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+180,Clean.Clean up,ECHOES 08,2024/12/11,コメティック,2024/11/19,2026/05/31,,,,,既存4週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+181,アイ NEED YOU（FOR WONDERFUL STORY）,アイ NEED YOU（FOR WONDERFUL STORY）,2024/12/11,櫻木真乃;風野灯織;八宮めぐる,2025/07/26,2025/07/26,,2026/01/21,2025/07/26,2026/1/21,,,,,,,初収録CDにキャラクターVer.収録
+182,星の数だけ,アニメ　Over the prism,2024/12/25,イルミネーションスターズ,2024/12/21,2024/12/21,,,,,,,,-2nd season LIVE Over the prism part2-,2025/03/01,,
+183,橙より未来,アニメ　Over the prism,2024/12/25,アンティーカ,2024/11/16,2024/11/16,,,,,,,,-2nd season LIVE Over the prism part2-,2025/03/01,,
+184,さあ舞い上がれ,アニメ　Over the prism,2024/12/25,放課後クライマックスガールズ,2024/12/07,2024/12/07,,,,,,,,-2nd season LIVE Over the prism part2-,2025/03/01,,
+185,With you,アニメ　Over the prism,2024/12/25,アルストロメリア,2024/11/23,2024/11/23,,,,,,,,-2nd season LIVE Over the prism part2-,2025/03/01,,
+186,Future Designer,アニメ　Over the prism,2024/12/25,ストレイライト,2024/11/30,2024/11/30,,,,,,,,-2nd season LIVE Over the prism part2-,2025/03/01,,
+187,未来へのSign,アニメ　Over the prism,2024/12/25,ノクチル,2024/12/14,2024/12/14,,,,,,,,-2nd season LIVE Over the prism part2-,2025/03/01,,
+188,STARRY PLACE,ECHOES 01,2025/01/22,イルミネーションスターズ,2024/12/11,,,,,,既存7週目,,,-7th UNITLIVE TOUR 円環 -Halo around- part1-,2025/06/21,,
+189,晴れのちバルーン,ECHOES 01,2025/01/22,イルミネーションスターズ,2024/12/19,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part2-,2025/06/21,,
+190,Migratory Echoes,ECHOES 09,2025/01/22,シャイニーカラーズ,2025/01/01,,,,,,,,,,,,
+191,Migratory Echoes (イルミネーションスターズ Ver.),ECHOES 09,2025/01/22,イルミネーションスターズ,2024/12/27,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+192,Migratory Echoes (アンティーカ Ver.),ECHOES 09,2025/01/22,アンティーカ,2024/05/30,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+193,Migratory Echoes (放課後クライマックスガールズ Ver.),ECHOES 09,2025/01/22,放課後クライマックスガールズ,2024/06/29,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+194,Migratory Echoes (アルストロメリア Ver.),ECHOES 09,2025/01/22,アルストロメリア,2024/07/27,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+195,Migratory Echoes (ストレイライト Ver.),ECHOES 09,2025/01/22,ストレイライト,2024/08/30,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+196,Migratory Echoes (ノクチル Ver.),ECHOES 09,2025/01/22,ノクチル,2024/09/29,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+197,Migratory Echoes (シーズ Ver.),ECHOES 09,2025/01/22,シーズ,2024/10/31,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+198,Migratory Echoes (コメティック Ver.),ECHOES 09,2025/01/22,コメティック,2024/11/29,,,,,,,,,-7th UNITLIVE TOUR 円環 -Halo around- part3-,2025/06/21,,
+199,Shower of light,Song for Prism Shower of light / 快盗Vを見逃すな,2025/01/29,イルミネーションスターズ,,2024/11/01,,2026/03/20,2026/01/21,,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+200,快盗Vを見逃すな,Song for Prism Shower of light / 快盗Vを見逃すな,2025/01/29,放課後クライマックスガールズ,,2024/11/29,2026/01/13,2026/03/20,2026/01/21,2025/12/18,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+201,THE LAST PRIDE,Song for Prism Real Mind Shakes / THE LAST PRIDE,2025/03/26,アンティーカ,,2025/01/31,,2026/03/20,2026/01/21,,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+202,Real Mind Shakes,Song for Prism Real Mind Shakes / THE LAST PRIDE,2025/03/26,ストレイライト,,2024/12/31,,2026/03/20,2026/01/21,,新曲2週目,,,-7th LIVE TOUR 螺旋 -Halo around- “The origin on the axes” –,2025/10/25,,
+203,Pioneer Impact,"""円環 -Halo around-"" 01",2025/06/04,アンティーカ;シーズ,2025/06/17,2025/09/25,,,,,,,,-∞th LIVE iと夢 part2-,2026/04/25,,
+204,ブレイク・アウト・セレンディピティ,"""円環 -Halo around-"" 01",2025/06/04,アンティーカ,2025/05/30,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+205,Break Chain,"""円環 -Halo around-"" 01",2025/06/04,シーズ,2025/06/09,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+206,迅雷鉄火,"""円環 -Halo around-"" 02",2025/07/02,放課後クライマックスガールズ;ストレイライト,2025/07/08,2025/10/29,,,,,,,,-∞th LIVE iと夢 part2-,2026/04/25,,
+207,進路は超銀河,"""円環 -Halo around-"" 02",2025/07/02,放課後クライマックスガールズ,2025/06/29,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+208,GET OVER,"""円環 -Halo around-"" 02",2025/07/02,ストレイライト,2025/06/29,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+209,リフレインブレイン,"""円環 -Halo around-"" 03",2025/08/06,アルストロメリア;コメティック,2025/08/08,2025/11/28,,,,,,,,-∞th LIVE iと夢 part2-,2026/04/25,,
+210,ルピラ,"""円環 -Halo around-"" 03",2025/08/06,アルストロメリア,2025/07/18,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+211,似セ者,"""円環 -Halo around-"" 03",2025/08/06,コメティック,2025/07/30,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+212,愛しき日々,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,ノクチル,,2025/02/28,,,,2025/12/18,新曲3週目,,,,,,
+213,Future Transit,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,ストレイライト,,2025/04/30,,,,,新曲3週目,,,,,,
+214,Fading Stars,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,シーズ,,2025/03/31,,,,,新曲3週目,,,,,,
+215,KoiKyun！,Song for Prism 愛しき日々 / Fading Stars / Future Transit / KoiKyun！,2025/09/03,イルミネーションスターズ,,2025/06/30,,,,2025/12/18,新曲3週目,,,,,,
+216,Sparkle,"""円環 -Halo around-"" 04",2025/09/10,イルミネーションスターズ;ノクチル,2025/09/19,2025/11/29,,,,,,,,-∞th LIVE iと夢 part2-,2026/04/25,,
+217,REWRITING,"""円環 -Halo around-"" 04",2025/09/10,イルミネーションスターズ,2025/08/30,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+218,Swing it!,"""円環 -Halo around-"" 04",2025/09/10,ノクチル,2025/09/09,,,,,,,,,-∞th LIVE iと夢 part1-,2026/04/25,,
+219,Borderline,Song for Prism BorderLine / クローバー / Summer Night Paradise,2025/12/24,シャイニーカラーズ,,2025/11/01,,2026/01/21,2025/11/01,2026/3/20,新曲3週目,2026/5/31,,,,,
+220,クローバー,Song for Prism BorderLine / クローバー / Summer Night Paradise,2025/12/24,杜野凛世;大崎甘奈;市川雛菜;七草にちか,,2026/06/30,,,2026/06/10,2026/1/21,新曲3週目,,,,,,
+221,Summer Night Paradise,Song for Prism BorderLine / クローバー / Summer Night Paradise,2025/12/24,櫻木真乃;田中摩美々;有栖川夏葉;桑山千雪;和泉愛依;樋口円香;緋田美琴;鈴木羽那,,2025/08/01,,,,2026/1/21,新曲3週目,,,,,,
+222,カウントダウンラブ,Song for Prism カウントダウンラブ / KAWAII♡めたもる交響曲,2026/01/07,I’m a Cutie Finder,,2025/11/10,2026/01/13,,,2026/3/20,PJ:REFRAC7IONS,2026/5/31,,,,,
+223,KAWAII♡めたもる交響曲,Song for Prism カウントダウンラブ / KAWAII♡めたもる交響曲,2026/01/07,I’m a Cutie Finder,,2025/11/22,,,,,PJ:REFRAC7IONS,,,,,,
+224,乱舞る,乱舞る / 疾風ザブングル,2026/01/14,放課後クライマックスガールズ,,,,,,,,,,,,,
+225,QUEEN OF THE PIRATES,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,アンティーカ,,2025/08/31,,,,,新曲3週目,,,,,,
+226,キラピコ.exe,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,放課後クライマックスガールズ,,2025/09/30,,,,,新曲3週目,,,,,,
+227,Sleepless Nights,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,アルストロメリア,,2024/11/01,,,,,新曲3週目,,,,,,
+228,アイノウ,Song for Prism QUEEN OF THE PIRATES / キラピコ.exe / Sleepless Nights / アイノウ,2026/01/28,コメティック,,2025/11/30,,,,,新曲3週目,,,,,,
+229,Karma,Song for Prism Karma / Naraku,2026/02/04,Fumage,,2025/12/10,,,,2026/3/20,PJ:REFRAC7IONS,2026/5/31,,,,,
+230,Naraku,Song for Prism Karma / Naraku,2026/02/04,Fumage,,2025/12/20,,,,,PJ:REFRAC7IONS,,,,,,
+231,感謝のコントレイル,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,シャイニーカラーズ,,2026/02/16,,,,,,,,,,,
+232,キズナシェアリング,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,Team.Stella,,,,,,,,,,,,,
+233,Lit up my sky,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,Team.Luna,,,,,,,,,,,,,
+234,永遠色アーチ,シャニマス大感謝祭！ 〜283スポーツフェスティバル〜,2026/02/14,Team.Sol,,,,,,,,,,,,,
+235,ボーダーレス・ノンストレス,Song for Prism ボーダーレス・ノンストレス / Oh Yeah!!,2026/03/04,Sonic Heart (and Signal),,2025/12/31,2026/01/13,,,2026/3/20,PJ:REFRAC7IONS,2026/5/31,,,,,
+236,Oh Yeah!!,Song for Prism ボーダーレス・ノンストレス / Oh Yeah!!,2026/03/04,Sonic Heart (and Signal),,2026/01/21,,,,,PJ:REFRAC7IONS,,,,,,
+237,銀翼のアレジアンス -blade of truth-,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,アンティーカ;シーズ;コメティック,,2025/12/27,,,,,,,,,,,
+238,メモワール・アンタクト,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,幽谷霧子,,2025/12/28,,,,,,,,,,,
+239,運命前夜,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,アンティーカ;シーズ;コメティック,,2025/12/27,,,,,,,,,,,
+240,月影のアンシェネ,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,田中摩美々,,2025/12/28,,,,,,,,,,,
+241,Once Upon a Secret,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,三峰結華,,2025/12/28,,,,,,,,,,,
+242,銀翼のアヴニール -become the brave-,騎士団のヴェール – Veil of Order – Music Collection,2026/03/11,アンティーカ;シーズ;コメティック,,2025/12/27,,,,,,,,,,,
+243,SUPER DUPER DREAMER,Song for Prism SUPER DUPER DREAMER / BEAST MODE,2026/04/01,Σ Desire,,2026/01/31,,,,2026/3/20,PJ:REFRAC7IONS,2026/5/31,,,,,
+244,BEAST MODE,Song for Prism SUPER DUPER DREAMER / BEAST MODE,2026/04/01,Σ Desire,,2026/02/20,,,,,PJ:REFRAC7IONS,,,,,,
+245,One Live One Love,XXX= S/N-GUL4R1TY MUSIC COLLECTION,2026/04/22,ストレイライト,,2026/04/12,,,,,,,,,,,
+246,One Live One Love (Mortal Remix),XXX= S/N-GUL4R1TY MUSIC COLLECTION,2026/04/22,ストレイライト,,2026/04/12,,,,,,,,,,,
+247,Ring Ring Ringの魔法,Song for Prism Ring Ring Ringの魔法 / 街角メランコリー,2026/04/29,ザ・ふたりトラベラー,,2026/02/28,,,,2024/5/31,PJ:REFRAC7IONS,2026/5/31,,,,,
+248,街角メランコリー,Song for Prism Ring Ring Ringの魔法 / 街角メランコリー,2026/04/29,ザ・ふたりトラベラー,,2026/03/20,,,,,PJ:REFRAC7IONS,,,,,,
+249,散花-sanka-,Song for Prism 散花-sanka- / 紅花-benibana-,2026/06/03,彼岸流,,2026/03/31,,,,2024/5/31,PJ:REFRAC7IONS,2026/5/31,,,,,
+250,紅花-benibana-,Song for Prism 散花-sanka- / 紅花-benibana-,2026/06/03,彼岸流,,2026/04/20,,,,,PJ:REFRAC7IONS,,,,,,
+251,Tokyo自由系*ガール,Song for Prism Tokyo自由系*ガール / My time,2026/07/01,No 1 feel alone,,2026/04/30,,,,2024/5/31,PJ:REFRAC7IONS,2026/5/31,,,,,
+252,My time,Song for Prism Tokyo自由系*ガール / My time,2026/07/01,No 1 feel alone,,2026/05/20,,,,,PJ:REFRAC7IONS,,,,,,
+253,放っておかないファイヴァーズ,アルバム未収録,,放課後クライマックスガールズ,未実装,未実装,,,,,,,2026/02/27,,,,
+254,泡沫に染まる,アルバム未収録,,風野灯織;月岡恋鐘;園田智代子;大崎甘奈;芹沢あさひ;浅倉透;七草にちか;斑鳩ルカ,,2026/08/01,,,,,新曲4週目,,,,,,

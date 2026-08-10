@@ -9,12 +9,298 @@ import datetime
 import calendar
 import textwrap
 import shutil
+import html
+import importlib
+from pathlib import Path
 from datetime import datetime
 from functools import lru_cache
+from PIL import Image, ImageDraw, ImageFont
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 import streamlit.components.v1 as components
+import event_image_gallery
+event_image_gallery = importlib.reload(event_image_gallery)
+from event_image_gallery import (
+    render_calendar_context_images,
+    render_costume_context_images,
+    render_event_context_images,
+    render_event_image_gallery,
+    render_gacha_context_images,
+)
+from public_data_publish import (
+    PublicPublishError,
+    discard_prepared_public_data,
+    prepare_public_data_sync,
+    publish_prepared_public_data,
+)
+
+
+# Streamlitの再読み込み中に旧モジュールが残っていても、画面全体を止めない。
+find_event_logo_path = getattr(event_image_gallery, "find_event_logo_path", lambda _event_name: None)
+find_event_setlist_image_paths = getattr(event_image_gallery, "find_event_setlist_image_paths", lambda _event_names: [])
+
+PUBLIC_MODE = globals().get("APP_MODE", os.environ.get("SHINY_APP_MODE", "local")).casefold() == "public"
+
+# 公開版は小さなメモリ枠で動くため、使い終えた集計結果を早めに入れ替える。
+# ローカル版は編集作業の快適さを優先して従来どおり多めに保持する。
+FILE_CACHE_MAX_ENTRIES = 18 if PUBLIC_MODE else 96
+DERIVED_CACHE_MAX_ENTRIES = 12 if PUBLIC_MODE else 32
+LYRIC_CACHE_MAX_ENTRIES = 8 if PUBLIC_MODE else 16
+MEDIA_CACHE_MAX_ENTRIES = 32 if PUBLIC_MODE else 128
+SONG_MEDIA_CACHE_MAX_ENTRIES = 48 if PUBLIC_MODE else 256
+
+
+def _adaptive_table_column_config(data, current_config=None):
+    """短い値の列だけをコンパクトにし、長文列は必要以上に広げない。"""
+    table_data = getattr(data, "data", data)
+    if not isinstance(table_data, pd.DataFrame):
+        return current_config
+
+    config = dict(current_config or {})
+    for column in table_data.columns:
+        values = table_data[column].dropna().astype(str).head(300)
+        max_chars = max([len(str(column))] + [len(value) for value in values], default=len(str(column)))
+        desired_width = "small" if max_chars <= 8 else "medium"
+
+        # すでに書式指定された短い列も、余白だけが大きくならないよう細くする。
+        if max_chars <= 8 or column not in config:
+            config[column] = st.column_config.Column(str(column), width=desired_width)
+    return config
+
+
+_original_dataframe = st.dataframe
+
+
+def _responsive_dataframe(data, *args, **kwargs):
+    kwargs["column_config"] = _adaptive_table_column_config(
+        data,
+        kwargs.get("column_config"),
+    )
+    return _original_dataframe(data, *args, **kwargs)
+
+
+st.dataframe = _responsive_dataframe
+
+
+def _analysis_image_font(size, bold=False):
+    """ローカル版の共有画像で日本語を崩さず表示する。"""
+    font_candidates = (
+        ["C:/Windows/Fonts/meiryob.ttc", "C:/Windows/Fonts/yumin.ttf"]
+        if bold
+        else ["C:/Windows/Fonts/meiryo.ttc", "C:/Windows/Fonts/yumin.ttf"]
+    )
+    for font_path in font_candidates:
+        if os.path.exists(font_path):
+            return ImageFont.truetype(font_path, size)
+    return ImageFont.load_default()
+
+
+def build_analysis_png(title, table_df, subtitle=""):
+    """現在の分析表を、投稿・共有しやすいPNGに変換する。"""
+    export_df = table_df.copy().fillna("")
+    if len(export_df) > 50:
+        export_df = export_df.head(50)
+        subtitle = (subtitle + "　" if subtitle else "") + "先頭50件を表示"
+
+    export_df = export_df.reset_index(drop=True)
+    export_df.insert(0, "#", range(1, len(export_df) + 1))
+    max_columns = 6
+    if len(export_df.columns) > max_columns:
+        export_df = export_df.iloc[:, :max_columns]
+        subtitle = (subtitle + "　" if subtitle else "") + f"先頭{max_columns - 1}項目を表示"
+
+    title_font = _analysis_image_font(32, bold=True)
+    header_font = _analysis_image_font(18, bold=True)
+    body_font = _analysis_image_font(17)
+    small_font = _analysis_image_font(15)
+    margin, row_height = 34, 38
+    max_width = 1600
+
+    def clipped(value, font, limit):
+        text = str(value).replace("\n", " ")
+        if ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(text, font=font) <= limit:
+            return text
+        suffix = "…"
+        while text and ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(text + suffix, font=font) > limit:
+            text = text[:-1]
+        return text + suffix
+
+    natural_widths = []
+    for column in export_df.columns:
+        values = [str(column)] + export_df[column].astype(str).tolist()
+        widest = max(ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(value, font=body_font) for value in values)
+        natural_widths.append(max(90, min(int(widest) + 28, 420)))
+    available_width = max_width - margin * 2
+    total_width = sum(natural_widths)
+    if total_width > available_width:
+        ratio = available_width / total_width
+        column_widths = [max(82, int(width * ratio)) for width in natural_widths]
+        column_widths[-1] += available_width - sum(column_widths)
+    else:
+        column_widths = natural_widths
+    table_width = sum(column_widths)
+    image_width = min(max_width, table_width + margin * 2)
+    header_height = 118 if subtitle else 90
+    image_height = header_height + row_height * (len(export_df) + 1) + margin
+
+    image = Image.new("RGB", (image_width, image_height), "#f7f5ff")
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle((12, 12, image_width - 12, image_height - 12), radius=22, fill="#ffffff", outline="#ded7ff", width=2)
+    draw.text((margin, 30), title, font=title_font, fill="#2c2c54")
+    if subtitle:
+        draw.text((margin, 74), subtitle, font=small_font, fill="#69648b")
+
+    y = header_height
+    x = margin
+    for column, width in zip(export_df.columns, column_widths):
+        draw.rectangle((x, y, x + width, y + row_height), fill="#6f55db")
+        draw.text((x + 10, y + 8), clipped(column, header_font, width - 20), font=header_font, fill="#ffffff")
+        x += width
+
+    for row_index, (_, row) in enumerate(export_df.iterrows()):
+        y = header_height + row_height * (row_index + 1)
+        fill = "#fff8df" if row_index == 0 else ("#faf9ff" if row_index % 2 == 0 else "#ffffff")
+        x = margin
+        for column, width in zip(export_df.columns, column_widths):
+            draw.rectangle((x, y, x + width, y + row_height), fill=fill, outline="#e6e2f5")
+            draw.text((x + 10, y + 9), clipped(row[column], body_font, width - 20), font=body_font, fill="#2c2c54")
+            x += width
+
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
+def render_analysis_image_download(title, table_df, key, subtitle=""):
+    """公開版には出さない、分析結果のPNG保存ボタン。"""
+    if PUBLIC_MODE or table_df is None or table_df.empty:
+        return
+    image_bytes = build_analysis_png(title, table_df, subtitle)
+    file_slug = re.sub(r"[^0-9A-Za-z_-]+", "_", title).strip("_") or "analysis"
+    st.download_button(
+        "🖼️ この分析を画像で保存",
+        data=image_bytes,
+        file_name=f"{file_slug}.png",
+        mime="image/png",
+        key=key,
+        help="現在の条件と表を、共有用のPNGとして保存します（最大50件）。",
+    )
+
+
+def build_analysis_report_png(title, subtitle, metrics, highlights, footer="SHINY COLORS LIVE DATABASE", jacket_path=None, setlist_paths=None):
+    """表の写しではなく、数値を整理した共有用レポート画像を作る。"""
+    width, margin = 1200, 56
+    title_font = _analysis_image_font(44, bold=True)
+    subtitle_font = _analysis_image_font(22)
+    metric_label_font = _analysis_image_font(19, bold=True)
+    metric_value_font = _analysis_image_font(33, bold=True)
+    item_font = _analysis_image_font(22, bold=True)
+    body_font = _analysis_image_font(18)
+    footer_font = _analysis_image_font(16)
+    metric_rows = (len(metrics) + 1) // 2
+    highlight_count = min(len(highlights), 6)
+    setlist_images = []
+    for path in setlist_paths or []:
+        if not path or not os.path.exists(path):
+            continue
+        try:
+            with Image.open(path) as source_image:
+                report_image = source_image.convert("RGB")
+                report_image.thumbnail((width - margin * 2, 1800))
+                setlist_images.append(report_image.copy())
+        except (OSError, ValueError):
+            continue
+    setlist_height = sum(image.height + 42 for image in setlist_images)
+    detail_height = setlist_height if setlist_images else (105 + highlight_count * 78)
+    height = 280 + metric_rows * 142 + detail_height + 90
+
+    image = Image.new("RGB", (width, height), "#f7f5ff")
+    draw = ImageDraw.Draw(image)
+
+    def clipped(text, font, max_width):
+        text = str(text).replace("\n", " ")
+        if draw.textlength(text, font=font) <= max_width:
+            return text
+        suffix = "…"
+        while text and draw.textlength(text + suffix, font=font) > max_width:
+            text = text[:-1]
+        return text + suffix
+
+    draw.rounded_rectangle((16, 16, width - 16, height - 16), radius=30, fill="#ffffff", outline="#ded7ff", width=3)
+    draw.rounded_rectangle((16, 16, width - 16, 210), radius=30, fill="#6250c7")
+    draw.rectangle((16, 140, width - 16, 210), fill="#6250c7")
+    draw.text((margin, 58), "SHINY COLORS LIVE DATABASE", font=subtitle_font, fill="#e7e2ff")
+    title_max_width = width - margin * 2 - (170 if jacket_path else 0)
+    draw.text((margin, 100), clipped(title, title_font, title_max_width), font=title_font, fill="#ffffff")
+    if subtitle:
+        draw.text((margin, 166), clipped(subtitle, subtitle_font, title_max_width), font=subtitle_font, fill="#f4f1ff")
+    if jacket_path and os.path.exists(jacket_path):
+        try:
+            with Image.open(jacket_path) as jacket_image:
+                jacket_image = jacket_image.convert("RGB")
+                jacket_image.thumbnail((140, 140))
+                jacket_x = width - margin - 140
+                jacket_y = 42 + (140 - jacket_image.height) // 2
+                draw.rounded_rectangle((jacket_x - 5, 37, jacket_x + 145, 187), radius=14, fill="#ffffff")
+                image.paste(jacket_image, (jacket_x + (140 - jacket_image.width) // 2, jacket_y))
+        except (OSError, ValueError):
+            pass
+
+    y = 250
+    card_width = (width - margin * 2 - 22) // 2
+    for index, (label, value) in enumerate(metrics):
+        x = margin + (index % 2) * (card_width + 22)
+        if index and index % 2 == 0:
+            y += 142
+        draw.rounded_rectangle((x, y, x + card_width, y + 112), radius=18, fill="#f5f2ff", outline="#ded7ff", width=2)
+        draw.text((x + 20, y + 18), str(label), font=metric_label_font, fill="#625a8b")
+        draw.text((x + 20, y + 53), str(value), font=metric_value_font, fill="#2c2c54")
+
+    y += 150
+    if setlist_images:
+        draw.text((margin, y), "公式セットリスト", font=_analysis_image_font(28, bold=True), fill="#2c2c54")
+        y += 48
+        for image_index, setlist_image in enumerate(setlist_images, start=1):
+            if len(setlist_images) > 1:
+                draw.text((margin, y), f"DAY{image_index}", font=item_font, fill="#6250c7")
+                y += 30
+            image_x = (width - setlist_image.width) // 2
+            image.paste(setlist_image, (image_x, y))
+            y += setlist_image.height + 20
+    else:
+        draw.text((margin, y), "記録のポイント", font=_analysis_image_font(28, bold=True), fill="#2c2c54")
+        y += 52
+        for index, (label, value) in enumerate(highlights[:highlight_count], start=1):
+            fill = "#fff8df" if index == 1 else ("#faf9ff" if index % 2 else "#f4faff")
+            draw.rounded_rectangle((margin, y, width - margin, y + 58), radius=12, fill=fill)
+            value_text = clipped(value, body_font, 240)
+            value_width = draw.textlength(value_text, font=body_font)
+            draw.text((margin + 18, y + 15), clipped(label, item_font, width - margin * 2 - value_width - 56), font=item_font, fill="#4f46a5")
+            draw.text((width - margin - 18 - value_width, y + 17), value_text, font=body_font, fill="#2c2c54")
+            y += 70
+
+    draw.line((margin, height - 62, width - margin, height - 62), fill="#ddd8f1", width=2)
+    draw.text((margin, height - 45), footer, font=footer_font, fill="#77708d")
+    output = io.BytesIO()
+    image.save(output, format="PNG", optimize=True)
+    return output.getvalue()
+
+
+def render_analysis_report_download(title, subtitle, metrics, highlights, key, jacket_path=None, setlist_paths=None):
+    """ローカル版だけで使える、共有向け分析レポートの保存ボタン。"""
+    if PUBLIC_MODE:
+        return
+    report_bytes = build_analysis_report_png(title, subtitle, metrics, highlights, jacket_path=jacket_path, setlist_paths=setlist_paths)
+    file_slug = re.sub(r"[^0-9A-Za-z_-]+", "_", title).strip("_") or "analysis_report"
+    st.download_button(
+        "🖼️ 分析レポートを画像で保存",
+        data=report_bytes,
+        file_name=f"{file_slug}_report.png",
+        mime="image/png",
+        key=key,
+        help="表をそのまま写さず、現在の分析内容を共有用レポートとしてまとめます。",
+    )
 
 # ------------------------------------------
 # 1. ページ初期設定＆シャニマス公式風（クリスタル＆虹色グラデーション）CSS
@@ -57,6 +343,13 @@ st.markdown(
     /* 基本要素の文字色保護 */
     p, span, div, label, .stMarkdown, .stSelectbox label, .stRadio label {
         color: #2c2c54 !important;
+    }
+
+    /* ユニットカラーのバッジは背景の明暗に左右されず読めるようにする */
+    .unit-color-badge,
+    .unit-color-badge * {
+        color: #ffffff !important;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.92), 0 0 2px rgba(0, 0, 0, 0.95) !important;
     }
 
     /* 余白調整 */
@@ -909,6 +1202,7 @@ COMMENTARY_BD_FILE = "commentary_blu_ray.csv"
 COMMENTARY_STREAM_FILE = "commentary_streaming.csv"
 RADIO_APPEARANCE_FILE = "shiny_radio_appearances.csv"
 RADIO_EPISODE_FILE = "shiny_radio_episodes.tsv"
+RADIO_MASTER_FILE = "shiny_radio_master.csv"
 JACKET_MAP_FILE = "release_jackets.csv"
 SONG_JACKET_FILE = "song_jackets.csv"
 JACKET_DIR = "album_jackets"
@@ -926,6 +1220,9 @@ YOUTUBE_LIVE_DIGEST_FILE = "youtube_live_digest_links_manual.csv"
 YOUTUBE_XR_INTRO_FILE = "youtube_xr_free_intro_links_manual.csv"
 EVENT_OFFICIAL_SITE_FILE = "event_official_sites.csv"
 PRICE_HISTORY_FILE = "price_history.csv"
+LIVE_VIDEO_BONUS_FILE = "live_video_bonus.csv"
+LIVE_BLU_RAY_CATALOG_FILE = "live_blu_ray_catalog.csv"
+UPCOMING_RELEASE_FILE = "upcoming_releases.csv"
 
 # 5.5th Anniversary LIVE 「星が見上げた空」は、全体曲でもユニットごとに
 # 着用衣装が固定されているため、通常の全体衣装フォールバックより先に判定する。
@@ -953,6 +1250,75 @@ MEMBER_COLOR_MAP = {
     "七草はづき": "#8adfff", "シャイニーカラーズ": "#8dbbff",
 }
 
+# PJ:REFRAC7IONS の配色。既存のイメージカラーと併記し、カード登録時などで確認に使う。
+PROJECT_COLOR_MAP = {
+    "櫻木真乃": "#FBC600", "風野灯織": "#FBFBF6", "八宮めぐる": "#EC6816",
+    "月岡恋鐘": "#8E4593", "田中摩美々": "#F4D500", "白瀬咲耶": "#355273", "三峰結華": "#B0E0E6", "幽谷霧子": "#B86D77",
+    "小宮果穂": "#E3FF00", "園田智代子": "#C1F9A2", "西城樹里": "#D94DFF", "杜野凛世": "#E8ECEF", "有栖川夏葉": "#EB6101",
+    "大崎甘奈": "#FDDDCD", "大崎甜花": "#FFB366", "桑山千雪": "#93B881",
+    "芹沢あさひ": "#ED6C00", "黛冬優子": "#7DF9FF", "和泉愛依": "#B7282E",
+    "浅倉透": "#719BAD", "樋口円香": "#FE347E", "福丸小糸": "#CFD4F1", "市川雛菜": "#235BC8",
+    "七草にちか": "#CEC5F0", "緋田美琴": "#006374", "斑鳩ルカ": "#6050DC", "鈴木羽那": "#FFBCD9", "郁田はるき": "#E83F1D",
+    "I’m a Cutie Finder": "#7BFFC3", "Fumage": "#3582A2", "Sonic Heart (and Signal)": "#0068B7",
+    "Σ Desire": "#A1A3A6", "ザ・ふたりトラベラー": "#E83F1D", "彼岸流": "#5AB5B2", "No 1 feel alone": "#F3F0EF",
+}
+
+SPECIAL_UNIT_COLOR_MAP = {
+    "I’m a Cutie Finder": "#FFD4F5", "Fumage": "#2A5D79", "Sonic Heart (and Signal)": "#FFF700",
+    "Σ Desire": "#282928", "ザ・ふたりトラベラー": "#FBC600", "彼岸流": "#E7001D", "No 1 feel alone": "#AFCBEB",
+    "Team.Stella": "#E9868C", "Team.Luna": "#527CC5", "Team.Sol": "#D5A52C",
+    "アール・エ・クルール": "#4F78D8", "マエストリア・エ・トラディチオーネ": "#078B96",
+    "ストリート・アンド・アヴォンガード": "#F05D55", "アーバン・アンド・ライフスタイル": "#9A9A9A",
+}
+
+
+def member_color_swatch(name):
+    """既存色とPJ:REFRAC7IONS色を並べた、小さな確認用スウォッチ。"""
+    primary = MEMBER_COLOR_MAP.get(str(name), "") or SPECIAL_UNIT_COLOR_MAP.get(str(name), "")
+    project = PROJECT_COLOR_MAP.get(str(name), "")
+    colors = [color for color in (primary, project) if re.fullmatch(r"#[0-9a-fA-F]{6}", color)]
+    if not colors:
+        return "", ""
+    background = colors[0] if len(colors) == 1 else f"linear-gradient(135deg, {colors[0]} 0 50%, {colors[1]} 50% 100%)"
+    label = " / ".join(colors)
+    return background, label
+
+
+def display_group_color(name):
+    """通常・公演固有を問わず、表示に使う代表色を返す。"""
+    return MEMBER_COLOR_MAP.get(str(name), "") or SPECIAL_UNIT_COLOR_MAP.get(str(name), "")
+
+
+def display_group_background(name):
+    """PJ:REFRAC7IONS は色①・色②を使い、その他は単色で表示する。"""
+    primary = display_group_color(name)
+    accent = PROJECT_COLOR_MAP.get(str(name), "")
+    if (
+        str(name) in SPECIAL_UNIT_COLOR_MAP
+        and re.fullmatch(r"#[0-9a-fA-F]{6}", primary)
+        and re.fullmatch(r"#[0-9a-fA-F]{6}", accent)
+    ):
+        return f"linear-gradient(135deg, {primary} 0%, {primary} 48%, {accent} 52%, {accent} 100%)"
+    return primary
+
+
+def render_unit_color_badges(unit_names):
+    """表のスタイル制限を避け、PJユニットの2色を確実に表示する。"""
+    badges = []
+    for unit_name in unique_in_registered_order([str(name) for name in unit_names if str(name).strip()]):
+        color = display_group_color(unit_name)
+        background = display_group_background(unit_name)
+        if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
+            continue
+        badges.append(
+            '<span class="unit-color-badge" style="display:inline-block;margin:0 8px 8px 0;padding:5px 10px;'
+            f'border-radius:999px;background:{background};box-shadow:inset 0 0 0 999px rgba(0,0,0,.10);'
+            'font-weight:800;">'
+            f'{html.escape(unit_name)}</span>'
+        )
+    if badges:
+        st.markdown("<div style=\"margin:0.2rem 0 0.7rem;\">" + "".join(badges) + "</div>", unsafe_allow_html=True)
+
 
 def find_file(filename):
     if os.path.exists(filename):
@@ -978,6 +1344,7 @@ COMMENTARY_BD_FILE = find_file(COMMENTARY_BD_FILE)
 COMMENTARY_STREAM_FILE = find_file(COMMENTARY_STREAM_FILE)
 RADIO_APPEARANCE_FILE = find_file(RADIO_APPEARANCE_FILE)
 RADIO_EPISODE_FILE = find_file(RADIO_EPISODE_FILE)
+RADIO_MASTER_FILE = find_file(RADIO_MASTER_FILE)
 if not os.path.exists(LYRICS_FILE):
     LYRICS_FILE = find_file("ライブ歌唱履歴 - 歌詞 のコピー.csv")
 JACKET_MAP_FILE = find_file(JACKET_MAP_FILE)
@@ -997,6 +1364,7 @@ YOUTUBE_LIVE_DIGEST_FILE = find_file(YOUTUBE_LIVE_DIGEST_FILE)
 YOUTUBE_XR_INTRO_FILE = find_file(YOUTUBE_XR_INTRO_FILE)
 EVENT_OFFICIAL_SITE_FILE = find_file(EVENT_OFFICIAL_SITE_FILE)
 PRICE_HISTORY_FILE = find_file(PRICE_HISTORY_FILE)
+UPCOMING_RELEASE_FILE = find_file(UPCOMING_RELEASE_FILE)
 
 
 # ------------------------------------------
@@ -1007,6 +1375,8 @@ def clean_text(text):
     if not isinstance(text, str):
         return text
     text = re.sub(r"(br|Td)\s*\{[^}]*\}", "", text, flags=re.IGNORECASE)
+    # 全角・半角の記号差で、楽曲・衣装・出演者などが別データにならないよう統一する。
+    text = text.translate(str.maketrans({"！": "!", "？": "?", "＆": "&", "／": "/", "：": ":"}))
     text = text.replace("　", " ").strip()
     return re.sub(r"\s+", " ", text)
 
@@ -1016,7 +1386,10 @@ def clean_live_name(text):
     if not isinstance(text, str):
         return text
     text = re.sub(
-        r"THE\s+IDOLM@STER\s+SHINY\s+COLORS\s*", "", text, flags=re.IGNORECASE
+        r"(?:THE\s+IDOLM@STER\s+SHINY\s+COLORS|アイドルマスター\s*シャイニーカラーズ)\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
     )
     return text.strip()
 
@@ -1037,10 +1410,12 @@ def make_search_key(text):
         return ""
     text = clean_song_title_for_search(text).lower()
     text = text.replace("？", "?").replace("！", "!")
+    # 「フェアリー・ガール」/「フェアリーガール」のような中黒の有無は同一扱いにする。
+    text = text.replace("・", "").replace("･", "")
     return re.sub(r"\s+", "", text)
 
 
-@st.cache_data(show_spinner=False, max_entries=96)
+@st.cache_data(show_spinner=False, max_entries=FILE_CACHE_MAX_ENTRIES)
 def _load_csv_cached(absolute_path, file_signature):
     """更新時刻とサイズをキーにして、同じファイルの再読込を省く。"""
     load_error = None
@@ -1078,7 +1453,7 @@ def normalize_dataframe(dataframe, clean_column_names=True):
     return normalized
 
 
-@st.cache_data(show_spinner=False, max_entries=96)
+@st.cache_data(show_spinner=False, max_entries=FILE_CACHE_MAX_ENTRIES)
 def _load_normalized_csv_cached(absolute_path, file_signature):
     """読込後の文字列整形まで含めてキャッシュする。"""
     return normalize_dataframe(
@@ -1120,11 +1495,24 @@ def get_file_separator(file_path):
     return "\t" if os.path.splitext(str(file_path))[1].lower() == ".tsv" else ","
 
 
+def create_single_backup(file_path):
+    """保存直前の状態を1つだけ保持し、古い自動バックアップは整理する。"""
+    source_path = Path(file_path)
+    for old_backup in source_path.parent.glob(f"{source_path.name}.backup_*"):
+        try:
+            old_backup.unlink()
+        except OSError:
+            # OneDriveの同期中などで消せない場合は、今回の保存を妨げない。
+            pass
+    backup_path = f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    shutil.copy2(file_path, backup_path)
+    return backup_path
+
+
 def save_dataframe(dataframe, file_path, create_backup=False):
     """区切り文字を維持して保存し、必要なら直前のファイルを退避する。"""
     if create_backup and os.path.exists(file_path):
-        backup_path = f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        shutil.copy2(file_path, backup_path)
+        backup_path = create_single_backup(file_path)
     else:
         backup_path = ""
     dataframe.to_csv(
@@ -1161,13 +1549,23 @@ def append_csv_rows(file_path, rows, expected_columns):
     )
 
 
+def append_radio_episode_row(episode_number, title, broadcast_at):
+    """シャニラジの既存TSV形式を保ったまま、1回分を追加する。"""
+    file_existed = os.path.exists(RADIO_EPISODE_FILE)
+    if file_existed:
+        create_single_backup(RADIO_EPISODE_FILE)
+    with open(RADIO_EPISODE_FILE, "a", encoding="utf-8", newline="") as handle:
+        csv.writer(handle, delimiter="\t").writerow([episode_number, title, broadcast_at])
+    _load_csv_cached.clear()
+    _load_normalized_csv_cached.clear()
+
+
 def upsert_csv_row(file_path, row, expected_columns, key_columns):
     """キーが同じ行は更新し、それ以外は追加する。登録フォーム用。"""
     if os.path.exists(file_path):
         existing_df = load_csv(file_path).fillna("")
         columns = existing_df.columns.tolist()
-        backup_path = f"{file_path}.backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        shutil.copy2(file_path, backup_path)
+        create_single_backup(file_path)
     else:
         existing_df = pd.DataFrame(columns=expected_columns)
         columns = expected_columns
@@ -1235,6 +1633,49 @@ def upsert_csv_rows(file_path, rows, expected_columns, key_columns):
     return len(incoming_df)
 
 
+def merge_csv_rows(file_path, rows, expected_columns, key_columns):
+    """同じキーの行は、入力済みの値を残しながら不足分だけ更新する。"""
+    if not rows:
+        return 0
+
+    file_existed = os.path.exists(file_path)
+    if file_existed:
+        existing_df = load_csv(file_path).fillna("")
+        columns = existing_df.columns.tolist()
+    else:
+        existing_df = pd.DataFrame(columns=expected_columns)
+        columns = list(expected_columns)
+
+    for column in expected_columns:
+        if column not in columns:
+            columns.append(column)
+    for column in columns:
+        if column not in existing_df.columns:
+            existing_df[column] = ""
+
+    merged_rows = []
+    for row in rows:
+        normalized_row = {column: row.get(column, "") for column in columns}
+        key_mask = pd.Series(True, index=existing_df.index)
+        for key_column in key_columns:
+            key_mask &= existing_df[key_column].astype(str) == str(normalized_row.get(key_column, ""))
+
+        if key_mask.any():
+            # 同じ公演・同じ曲順などは1行に統合。空欄は既存値を消さない。
+            base_row = existing_df.loc[key_mask].iloc[0].to_dict()
+            for column, value in normalized_row.items():
+                if str(value).strip():
+                    base_row[column] = value
+            existing_df = existing_df.loc[~key_mask]
+            merged_rows.append(base_row)
+        else:
+            merged_rows.append(normalized_row)
+
+    result_df = pd.concat([existing_df, pd.DataFrame(merged_rows)], ignore_index=True)
+    save_dataframe(result_df.reindex(columns=columns), file_path, create_backup=file_existed)
+    return len(rows)
+
+
 def unique_in_registered_order(values):
     """CSVに登場した順を保って重複だけを除く。"""
     seen = set()
@@ -1247,7 +1688,7 @@ def unique_in_registered_order(values):
     return ordered_values
 
 
-@st.cache_data(show_spinner=False, max_entries=32)
+@st.cache_data(show_spinner=False, max_entries=DERIVED_CACHE_MAX_ENTRIES)
 def build_song_series_map(song_album_df, album_master_df, song_album_col, album_name_col, series_col):
     """アルバム名の略称・正式名の違いを許容して、楽曲からシリーズを引ける辞書を作る。"""
     if any(frame.empty for frame in [song_album_df, album_master_df]):
@@ -1376,7 +1817,7 @@ def make_lyric_excerpt(lyrics, terms, radius=46):
     return ("…" if start else "") + text[start:end] + ("…" if end < len(text) else "")
 
 
-@st.cache_data(show_spinner=False, max_entries=16)
+@st.cache_data(show_spinner=False, max_entries=LYRIC_CACHE_MAX_ENTRIES)
 def get_frequent_lyric_phrases(lyrics_series, limit=20):
     """助詞・語尾を除き、歌詞の内容に関わる語だけを簡易集計する。"""
     ignored_words = {
@@ -1553,7 +1994,7 @@ def load_optional_media_csv(file_path, columns):
         return pd.DataFrame(columns=columns)
 
 
-@st.cache_data(show_spinner=False, max_entries=256)
+@st.cache_data(show_spinner=False, max_entries=SONG_MEDIA_CACHE_MAX_ENTRIES)
 def build_song_media_options(
     song_name,
     audio_draft_df,
@@ -1561,7 +2002,6 @@ def build_song_media_options(
     video_variants_df,
     album_name="",
     contextual_media_df=None,
-    album_preview_df=None,
 ):
     """選択曲に紐づく公式YouTubeの音源・MVを、重複なく選択肢にする。"""
     song_key = make_search_key(song_name)
@@ -1600,25 +2040,6 @@ def build_song_media_options(
                 contextual_match_found = True
                 add_option("公式音源", f"公式音源｜{row['対象アルバム']}", row["YouTube_URL"])
 
-    # 収録アルバム単位の試聴動画。曲の選択中でも、今選んでいるアルバムに
-    # 対応した動画だけを候補へ加える。
-    if album_preview_df is not None and not album_preview_df.empty and {"アルバム", "種別", "YouTube_URL"}.issubset(album_preview_df.columns):
-        selected_album_key = make_search_key(album_name)
-        preview_album_keys = (
-            album_preview_df["_album_search_key"]
-            if "_album_search_key" in album_preview_df.columns
-            else album_preview_df["アルバム"].map(make_search_key)
-        )
-        if selected_album_key:
-            matched_previews = album_preview_df[
-                preview_album_keys.map(
-                    lambda preview_key: preview_key in selected_album_key
-                    or selected_album_key in preview_key
-                )
-            ]
-            for row in matched_previews.to_dict("records"):
-                add_option(str(row["種別"]), f"{row['種別']}｜{row['アルバム']}", row["YouTube_URL"])
-
     # Migratory Echoes は収録盤ごとの音源が最優先。ECHOES 09 の
     # 汎用音源で上書きしないよう、文脈一致時は通常音源候補を追加しない。
     if not contextual_match_found and not audio_draft_df.empty and {"楽曲名", "公式音源_URL"}.issubset(audio_draft_df.columns):
@@ -1656,7 +2077,38 @@ def build_song_media_options(
     return options
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
+def build_album_preview_options(album_name, album_preview_df):
+    """選択中の収録アルバムに紐づく試聴動画だけを返す。"""
+    if not album_name or album_preview_df is None or album_preview_df.empty:
+        return []
+    if not {"アルバム", "種別", "YouTube_URL"}.issubset(album_preview_df.columns):
+        return []
+
+    selected_album_key = make_search_key(album_name)
+    preview_album_keys = (
+        album_preview_df["_album_search_key"]
+        if "_album_search_key" in album_preview_df.columns
+        else album_preview_df["アルバム"].map(make_search_key)
+    )
+    matched_previews = album_preview_df[
+        preview_album_keys.map(
+            lambda preview_key: preview_key in selected_album_key
+            or selected_album_key in preview_key
+        )
+    ]
+    options, seen_urls = [], set()
+    for row in matched_previews.to_dict("records"):
+        url = str(row["YouTube_URL"]).strip()
+        if not url or url == "nan" or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        kind = str(row["種別"])
+        options.append({"種別": kind, "表示": f"{kind}｜{row['アルバム']}", "URL": url})
+    return options
+
+
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def build_event_media_options(event_name, live_digest_df, xr_intro_df, ap_stream_df=None):
     """公演名が日別表記でも、共通の公式映像を見つけられるようにする。"""
     selected_key = make_event_media_key(event_name)
@@ -1700,7 +2152,7 @@ def build_event_media_options(event_name, live_digest_df, xr_intro_df, ap_stream
     return options
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def find_event_social_links(event_name, social_links_df):
     """公演の日別表記を吸収し、公式告知・ビジュアルへのリンクを返す。"""
     if social_links_df.empty or not {"対象公演", "種別", "URL"}.issubset(social_links_df.columns):
@@ -1743,7 +2195,7 @@ def render_analysis_chart(fig, key=None, height=None):
     st.caption("グラフ右上のカメラボタンから、PNG画像として保存できます。")
 
 
-@st.cache_data(show_spinner=False, max_entries=128)
+@st.cache_data(show_spinner=False, max_entries=MEDIA_CACHE_MAX_ENTRIES)
 def find_event_official_site_urls(event_name, official_site_df):
     """DAY別の公演名から、共通の公式イベントページを見つける。"""
     if official_site_df.empty or not {"対象公演", "公式サイトURL"}.issubset(official_site_df.columns):
@@ -1846,6 +2298,65 @@ if os.path.exists(SETLIST_FILE):
     else:
         df["公演区分"] = "未設定"
 
+    if "公演区分" not in df.columns:
+        df["公演区分"] = "未設定"
+
+    # ローカル確認用：キャストライブを複数の開催テーマで分類する。
+    # events.csv の元データと、既存の「キャストライブ」区分は変更しない。
+    # 1公演に「周年・夏」のように複数のテーマを付けられる。
+    def classify_cast_live_themes(event_name):
+        name = clean_live_name(str(event_name)).lower()
+        themes = []
+
+        def has(*keywords):
+            return any(keyword in name for keyword in keywords)
+
+        if has(
+            "1stlive", "2ndlive", "3rdlive tour", "4thlive", "5thlive", "6thlive tour",
+            "unitlive tour 円環", "halo around", "live tour 螺旋", "the origin on the axes",
+            "∞th live iと夢",
+        ):
+            themes.append("周年")
+        if has("5.5th", "6.5th", "live tour 螺旋", "the origin on the axes", "still blue"):
+            themes.append("ハフバ")
+        if has("summer party 2019", "setsuna beat", "我儘なまま", "live fun", "unitlive tour 円環", "halo around", "master showpiece"):
+            themes.append("夏")
+        if has(
+            "summer party 2019", "music dawn", "283フェス", "xmas party", "setsuna beat", "mugen beat",
+            "我儘なまま", "live fun", "2nd season live over the prism", "シャニマス大感謝祭", "master showpiece",
+        ):
+            themes.append("コンセプト")
+        if has("シャニソンライブ", "5.5th", "6.5th", "live tour 螺旋", "still blue"):
+            themes.append("シャニソンライブ")
+        if has("アニメライブ", "live fun", "2nd season live over the prism"):
+            themes.append("アニメライブ")
+        if has("我儘なまま", "master showpiece"):
+            themes.append("ソロライブ")
+        if has("1.5", "283フェス", "mugen beat", "5.5th", "6.5th", "live tour 螺旋", "the origin on the axes", "still blue"):
+            themes.append("秋ライブ")
+        return themes or ["その他"]
+
+    if live_col_name:
+        df["キャストライブ分類"] = df.apply(
+            lambda row: "・".join(classify_cast_live_themes(row[live_col_name]))
+            if "キャストライブ" in re.split(r"[|｜]", str(row["公演区分"]))
+            else "",
+            axis=1,
+        )
+
+    # 公演は複数の区分に属する場合があるため、表示用の区分と絞り込み用の区分を分ける。
+    # events.csv では複数区分を「XR|合同」のように | で記載する。
+    def split_event_categories(value):
+        categories = [
+            category.strip()
+            for category in re.split(r"[|｜]", str(value))
+            if category.strip()
+        ]
+        return categories or ["未設定"]
+
+    df["公演区分フィルター"] = df["公演区分"].apply(split_event_categories)
+    df["公演区分"] = df["公演区分フィルター"].apply("・".join)
+
     idol_df = pd.DataFrame()
     cast_list = []
     idol_list = []
@@ -1853,6 +2364,7 @@ if os.path.exists(SETLIST_FILE):
     idol_to_cast_map = {}
     idol_to_unit_map = {}
     idol_to_groups_map = {}
+    group_member_map_by_column = {}
 
     if os.path.exists(IDOL_MASTER_FILE):
         idol_df = load_normalized_csv(IDOL_MASTER_FILE)
@@ -1887,6 +2399,7 @@ if os.path.exists(SETLIST_FILE):
                     group = str(row[group_col]) if pd.notnull(row[group_col]) else ""
                     if group and group != "nan":
                         groups.add(group)
+                        group_member_map_by_column.setdefault(group_col, {})[ch] = group
                 if ch and ch != "nan":
                     idol_list.append(ch)
                     if un: idol_to_unit_map[ch] = un
@@ -1898,6 +2411,10 @@ if os.path.exists(SETLIST_FILE):
                             cast_to_idol_map[sub_ca.strip()] = ch
                             if un: idol_to_unit_map[sub_ca.strip()] = un
                             if groups: idol_to_groups_map[sub_ca.strip()] = groups
+                            for group_col in member_group_columns:
+                                group = str(row[group_col]) if pd.notnull(row[group_col]) else ""
+                                if group and group != "nan":
+                                    group_member_map_by_column.setdefault(group_col, {})[sub_ca.strip()] = group
                 if ch and ca:
                     idol_to_cast_map[ch] = ca
 
@@ -1959,6 +2476,14 @@ if os.path.exists(SETLIST_FILE):
             ].map(make_search_key)
 
     # 公式ディスコグラフィーから取得したジャケットの対応表
+    upcoming_releases_df = pd.DataFrame()
+    if os.path.exists(UPCOMING_RELEASE_FILE):
+        upcoming_releases_df = load_normalized_csv(UPCOMING_RELEASE_FILE)
+        if "発売日" in upcoming_releases_df.columns:
+            upcoming_releases_df["発売日_dt"] = pd.to_datetime(
+                upcoming_releases_df["発売日"], errors="coerce"
+            )
+
     album_jacket_map = {}
     jacket_path_by_file_name = {}
     if os.path.exists(JACKET_MAP_FILE) and os.path.isdir(JACKET_DIR):
@@ -2041,7 +2566,7 @@ if os.path.exists(SETLIST_FILE):
 
     # 歌詞データは、先頭の連番列や空列を自動で無視して使用する
     lyrics_df = pd.DataFrame(columns=["楽曲名", "歌詞"])
-    if os.path.exists(LYRICS_FILE):
+    if not PUBLIC_MODE and os.path.exists(LYRICS_FILE):
         raw_lyrics_df = load_normalized_csv(LYRICS_FILE)
         lyrics_song_col = next((c for c in raw_lyrics_df.columns if "楽曲名" in c), None)
         lyrics_text_col = next((c for c in raw_lyrics_df.columns if "歌詞" in c), None)
@@ -2112,25 +2637,57 @@ if os.path.exists(SETLIST_FILE):
                         })
     commentary_df = pd.DataFrame(commentary_rows)
 
-    # シャニラジ出演履歴（キャストごとの横持ち回番号一覧を行データへ変換）
+    # シャニラジは統合マスターを優先する。旧CSV/TSVも過去データとの互換用に残す。
+    radio_cast_aliases = {
+        "菅沼千沙": "菅沼千紗",
+        "小澤麗奈": "小澤麗那",
+    }
     radio_rows = []
     if os.path.exists(RADIO_APPEARANCE_FILE):
         raw_radio_df = load_csv(RADIO_APPEARANCE_FILE).fillna("")
-        radio_cast_aliases = {"菅沼千沙": "菅沼千紗"}
-        for radio_row in raw_radio_df.to_dict("records"):
-            radio_values = list(radio_row.values())
-            if len(radio_values) < 2:
-                continue
-            radio_cast = radio_cast_aliases.get(clean_text(str(radio_values[1])), clean_text(str(radio_values[1])))
-            for episode_value in radio_values[2:]:
-                episode_text = normalize_radio_episode(episode_value)
+        if {"キャスト", "出演回"}.issubset(raw_radio_df.columns):
+            for radio_row in raw_radio_df[["キャスト", "出演回"]].to_dict("records"):
+                radio_cast = radio_cast_aliases.get(
+                    clean_text(str(radio_row["キャスト"])), clean_text(str(radio_row["キャスト"]))
+                )
+                episode_text = normalize_radio_episode(radio_row["出演回"])
                 if radio_cast and episode_text and episode_text != "nan":
                     radio_rows.append({"キャスト": radio_cast, "出演回": episode_text})
+        else:
+            # 旧来の横持ち形式（キャストごとの回番号一覧）を読み込む。
+            for radio_row in raw_radio_df.to_dict("records"):
+                radio_values = list(radio_row.values())
+                if len(radio_values) < 2:
+                    continue
+                radio_cast = radio_cast_aliases.get(
+                    clean_text(str(radio_values[1])), clean_text(str(radio_values[1]))
+                )
+                for episode_value in radio_values[2:]:
+                    episode_text = normalize_radio_episode(episode_value)
+                    if radio_cast and episode_text and episode_text != "nan":
+                        radio_rows.append({"キャスト": radio_cast, "出演回": episode_text})
     radio_appearance_df = pd.DataFrame(radio_rows).drop_duplicates()
 
-    # シャニラジ各回の放送日・内容。フルサイズの重複行（#で始まる行）は読み飛ばす。
     radio_episode_rows = []
-    if os.path.exists(RADIO_EPISODE_FILE):
+    if os.path.exists(RADIO_MASTER_FILE):
+        raw_radio_master_df = load_csv(RADIO_MASTER_FILE).fillna("")
+        for radio_row in raw_radio_master_df.to_dict("records"):
+            episode_number = normalize_radio_episode(radio_row.get("出演回", ""))
+            if not re.fullmatch(r"\d+", episode_number):
+                continue
+            radio_episode_rows.append({
+                "出演回": episode_number,
+                "放送内容": clean_text(str(radio_row.get("放送内容", ""))),
+                "初回放送": clean_text(str(radio_row.get("初回放送", ""))),
+                "種類": clean_text(str(radio_row.get("種類", ""))),
+                "ユニット回": clean_text(str(radio_row.get("ユニット回", ""))),
+                "マンスリーMC": clean_text(str(radio_row.get("マンスリーMC", ""))),
+                "ゲスト": clean_text(str(radio_row.get("ゲスト", ""))),
+                "欠席": clean_text(str(radio_row.get("欠席", ""))),
+                "公式配信URL": clean_text(str(radio_row.get("公式配信URL", ""))),
+            })
+    elif os.path.exists(RADIO_EPISODE_FILE):
+        # 統合マスター未作成時は従来のTSVを利用する。
         with open(RADIO_EPISODE_FILE, encoding="utf-8", newline="") as radio_episode_file:
             for row in csv.reader(radio_episode_file, delimiter="\t"):
                 if len(row) < 3:
@@ -2211,6 +2768,14 @@ if os.path.exists(SETLIST_FILE):
         PRICE_HISTORY_FILE,
         ["対象名", "カテゴリ", "価格種別", "価格", "日付"],
     )
+    live_video_bonus_df = load_optional_media_csv(
+        LIVE_VIDEO_BONUS_FILE,
+        ["対象公演", "収録商品", "収録範囲", "収録内容"],
+    )
+    live_blu_ray_catalog_df = load_optional_media_csv(
+        LIVE_BLU_RAY_CATALOG_FILE,
+        ["商品名", "発売日", "本編収録", "初回・特装版特典", "通常版の内容", "補足"],
+    )
 
     if "日付" in df.columns:
         df["日付_dt"] = pd.to_datetime(df["日付"], errors="coerce")
@@ -2238,12 +2803,9 @@ if os.path.exists(SETLIST_FILE):
             f"データ最終更新: {latest_source_update.strftime('%Y/%m/%d %H:%M')}"
         )
 
-    display_mode = st.sidebar.radio(
-        "🎨 表示モード",
-        ["ライト", "ダーク"],
-        horizontal=True,
-        key="display_mode",
-    )
+    # 表・選択欄の表示がOSのダークモードに引っ張られないよう、当面はライト表示に固定する。
+    display_mode = "ライト"
+    st.sidebar.caption("🎨 表示：ライト固定")
 
     if display_mode == "ダーク":
         st.markdown(
@@ -2331,18 +2893,81 @@ if os.path.exists(SETLIST_FILE):
         st.markdown(
             """
             <style>
-            html, body, [data-testid="stAppViewContainer"], [data-testid="stDataFrame"] {
+            :root, html, body, [data-testid="stAppViewContainer"], [data-testid="stDataFrame"] {
                 color-scheme: light !important;
+            }
+            html, body, [data-testid="stAppViewContainer"] {
+                background: linear-gradient(135deg, #ffffff 0%, #f4f0ff 35%, #e8f7ff 70%, #fff0f5 100%) !important;
+                color: #2c2c54 !important;
+            }
+            p, span, div, label, .stMarkdown, .stSelectbox label, .stRadio label {
+                color: #2c2c54 !important;
+            }
+            [data-testid="stSidebar"] {
+                background: rgba(255, 255, 255, 0.94) !important;
+                border-right-color: rgba(123, 92, 255, 0.22) !important;
             }
             [data-testid="stDataFrame"] [role="grid"],
             [data-testid="stDataFrame"] [role="gridcell"],
             [data-testid="stDataFrame"] [role="columnheader"] {
                 background-color: #ffffff !important;
                 color: #2c2c54 !important;
+                border-color: #deddf0 !important;
             }
             [data-testid="stDataFrame"] [role="columnheader"] {
                 background-color: #f4f0ff !important;
             }
+            [data-testid="stDataFrame"] div,
+            [data-testid="stDataFrame"] span {
+                color: #2c2c54 !important;
+            }
+            [data-testid="stDataFrame"] {
+                --gdg-bg-cell: #ffffff !important;
+                --gdg-bg-cell-medium: #fbfaff !important;
+                --gdg-bg-header: #f4f0ff !important;
+                --gdg-bg-header-has-focus: #e8e1ff !important;
+                --gdg-text-dark: #2c2c54 !important;
+                --gdg-text-medium: #62627d !important;
+                --gdg-border-color: #deddf0 !important;
+                --gdg-accent-color: #7b5cff !important;
+            }
+            div[data-baseweb="select"],
+            div[data-baseweb="select"] > div,
+            div[data-baseweb="popover"],
+            div[data-baseweb="menu"],
+            ul[role="listbox"],
+            div[role="option"] {
+                background-color: #ffffff !important;
+                color: #2c2c54 !important;
+            }
+            div[data-baseweb="popover"] *,
+            div[data-baseweb="menu"] *,
+            div[role="option"] * {
+                color: #2c2c54 !important;
+            }
+            [data-testid="stMetric"], .shiny-header {
+                background: rgba(255, 255, 255, 0.92) !important;
+                border-color: rgba(123, 92, 255, 0.25) !important;
+            }
+            .app-page-header,
+            .analysis-target-card,
+            [data-testid="stExpander"] {
+                background: rgba(255, 255, 255, 0.9) !important;
+                border-color: rgba(123, 92, 255, 0.2) !important;
+            }
+            .app-page-title, .analysis-target-title, [data-testid="stMetricValue"] {
+                color: #2c2c54 !important;
+            }
+            .app-page-description, .analysis-target-meta, [data-testid="stMetricLabel"] {
+                color: #62627d !important;
+            }
+            div.stButton > button[kind="secondary"] {
+                background: #ffffff !important;
+                color: #5a45d6 !important;
+                border-color: #b9afe8 !important;
+            }
+            .stTabs [data-baseweb="tab-list"] { background-color: #ffffff !important; }
+            .stTabs [data-baseweb="tab"] { color: #4b467c !important; }
             </style>
             """,
             unsafe_allow_html=True,
@@ -2436,7 +3061,13 @@ if os.path.exists(SETLIST_FILE):
 
     # 公演区分フィルター
     st.sidebar.subheader("🏟️ 公演区分フィルター")
-    all_event_types = unique_in_registered_order(df["公演区分"].tolist())
+    all_event_types = unique_in_registered_order(
+        [
+            category
+            for categories in df["公演区分フィルター"]
+            for category in categories
+        ]
+    )
 
     if "selected_event_types" not in st.session_state:
         st.session_state.selected_event_types = set(all_event_types)
@@ -2481,7 +3112,11 @@ if os.path.exists(SETLIST_FILE):
                 st.session_state.selected_event_types.add(etype)
             st.rerun()
 
-    df = df[df["公演区分"].isin(st.session_state.selected_event_types)]
+    df = df[
+        df["公演区分フィルター"].apply(
+            lambda categories: set(categories).issubset(st.session_state.selected_event_types)
+        )
+    ]
 
     st.sidebar.markdown("---")
 
@@ -2568,8 +3203,7 @@ if os.path.exists(SETLIST_FILE):
         None,
     )
     home_costume_col = next((c for c in df.columns if "衣装" in c), None)
-    tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11, tab12, tab13 = st.tabs(
-        [
+    tab_labels = [
             "✨ ホーム",
             "📊 分析",
             "🎵 楽曲",
@@ -2580,15 +3214,47 @@ if os.path.exists(SETLIST_FILE):
             "➕ データ管理",
             "🏟️ 公演",
             "👥 参加履歴",
-            "📝 歌詞",
+            "📚 楽曲情報" if PUBLIC_MODE else "📝 歌詞",
             "📺 番組・配信",
             "🗓️ カレンダー",
             "💴 価格推移",
-        ]
+            "📅 スケジュール予想",
+            "🖼️ イベント画像",
+            "📋 楽曲一覧",
+    ]
+    # 配信を見ながら使う下書きは、公開版には載せないローカル専用ページにする。
+    if not PUBLIC_MODE:
+        tab_labels.append("📝 ライブ中メモ")
+
+    home_page_tabs = {
+        "home": "✨ ホーム",
+        "analysis": "📊 分析",
+        "song": "🎵 楽曲",
+        "vocal": "🎤 歌唱・衣装",
+        "costume": "👗 衣装",
+        "event": "🏟️ 公演",
+        "attendance": "👥 参加履歴",
+        "program": "📺 番組・配信",
+        "price": "💴 価格推移",
+        "songlist": "📋 楽曲一覧",
+    }
+    requested_home_page = str(st.query_params.get("page", "home"))
+    requested_tab = home_page_tabs.get(requested_home_page, "✨ ホーム")
+    if st.session_state.get("_handled_home_page") != requested_home_page:
+        st.session_state["main_navigation_tabs"] = requested_tab
+        st.session_state["_handled_home_page"] = requested_home_page
+    selected_tab = st.pills(
+        "ページを選択",
+        tab_labels,
+        selection_mode="single",
+        default=requested_tab,
+        key="main_navigation_tabs",
+        label_visibility="collapsed",
+        width="stretch",
     )
 
     # TAB 0: ホーム
-    with tab0:
+    if selected_tab == tab_labels[0]:
         render_page_header(
             "✨",
             "ライブデータ・ホーム",
@@ -2628,8 +3294,17 @@ if os.path.exists(SETLIST_FILE):
                 latest_setlist = df[df["公演名"] == latest.get("公演名")]
                 st.caption(f"この公演の登録曲数: {len(latest_setlist):,} 曲")
                 preview_columns = [c for c in ["曲順", "楽曲名", home_singer_col, home_costume_col] if c and c in latest_setlist.columns]
+                preview_df = latest_setlist[preview_columns].head(8).reset_index(drop=True).copy()
+                if home_singer_col and home_singer_col in preview_df.columns:
+                    preview_df[home_singer_col] = (
+                        preview_df[home_singer_col]
+                        .fillna("")
+                        .astype(str)
+                        .str.replace(";", "・", regex=False)
+                        .str.replace("；", "・", regex=False)
+                    )
                 st.dataframe(
-                    latest_setlist[preview_columns].head(8).reset_index(drop=True),
+                    preview_df,
                     use_container_width=True,
                     height=285,
                     hide_index=True,
@@ -2647,6 +3322,19 @@ if os.path.exists(SETLIST_FILE):
                 - **歌詞キーワード検索**：好きな言葉から曲を発見する
                 """
             )
+            st.markdown("#### 機能を開く")
+            home_link_rows = [
+                [("📊 ランキング分析", "?page=analysis"), ("🎵 楽曲を調べる", "?page=song")],
+                [("🎤 歌唱・衣装", "?page=vocal"), ("👗 衣装を調べる", "?page=costume")],
+                [("🏟️ 公演セットリスト", "?page=event"), ("👥 出演・参加履歴", "?page=attendance")],
+                [("📺 番組・配信履歴", "?page=program"), ("💴 BD・価格情報", "?page=price")],
+            ]
+            for left_link, right_link in home_link_rows:
+                left_col, right_col = st.columns(2)
+                with left_col:
+                    st.link_button(left_link[0], left_link[1], use_container_width=True)
+                with right_col:
+                    st.link_button(right_link[0], right_link[1], use_container_width=True)
             if not lyrics_df.empty:
                 st.info(f"歌詞データ {len(lyrics_df):,} 曲を読み込み済みです。")
 
@@ -2706,7 +3394,7 @@ if os.path.exists(SETLIST_FILE):
                 )
 
     # TAB 1: ランキング＆公演別アルバムシリーズ比率分析
-    with tab1:
+    if selected_tab == tab_labels[1]:
         render_page_header(
             "📊",
             "ランキング＆比率分析",
@@ -2792,28 +3480,98 @@ if os.path.exists(SETLIST_FILE):
                 aggregated_rank = aggregated_rank.sort_values(by="経過日数_num", ascending=False)
 
             display_rank = aggregated_rank[[rank_target, count_col_name, "最終披露日", "前回からの経過"]].reset_index(drop=True)
-            display_rank.index = display_rank.index + 1
+            rank_value_col = count_col_name if rank_order in {"多い順", "少ない順"} else "経過日数_num"
+            rank_ascending = rank_order == "少ない順"
+            display_rank.insert(
+                0,
+                "順位",
+                aggregated_rank[rank_value_col].rank(method="min", ascending=rank_ascending).astype(int).to_list(),
+            )
             
             # 1〜3位の行を強調表示するハイライト関数
             def highlight_top3_rows(row):
-                idx = row.name
-                if idx == 1:
+                rank_number = int(row["順位"])
+                if rank_number == 1:
                     return ['background-color: #FFF3CD; color: #856404; font-weight: bold;'] * len(row)
-                elif idx == 2:
+                elif rank_number == 2:
                     return ['background-color: #E2E3E5; color: #383D41; font-weight: bold;'] * len(row)
-                elif idx == 3:
+                elif rank_number == 3:
                     return ['background-color: #F8D7DA; color: #721C24; font-weight: bold;'] * len(row)
                 return [''] * len(row)
 
             st.markdown("### 📋 ランキング詳細一覧")
-            st.dataframe(
-                display_rank.style.apply(highlight_top3_rows, axis=1), 
-                use_container_width=True,
-                column_config={
-                    rank_target: st.column_config.TextColumn(rank_target, width="large"),
-                    "最終披露日": st.column_config.TextColumn("最終披露日", width="small"),
-                    "前回からの経過": st.column_config.TextColumn("前回からの経過", width="medium"),
+            st.markdown(
+                """
+                <style>
+                .ranking-table-wrap { max-height: 720px; overflow: auto; border: 1px solid rgba(102,87,217,.22); border-radius: 14px; background: rgba(255,255,255,.92); }
+                .ranking-table { width: 100%; border-collapse: collapse; color: #29274f; table-layout: fixed; }
+                .ranking-table th { position: sticky; top: 0; z-index: 1; background: #f7f5ff; border-bottom: 2px solid #4a4674; font-weight: 800; text-align: left; }
+                .ranking-table th, .ranking-table td { padding: .62rem .72rem; border-bottom: 1px solid rgba(72,65,131,.13); vertical-align: middle; overflow-wrap: anywhere; }
+                .ranking-table .rank-col { width: 4.2rem; text-align: center; font-weight: 800; }
+                .ranking-table .count-col { width: 6.5rem; text-align: right; font-weight: 800; }
+                .ranking-table .mobile-metric-col { display: none; }
+                .ranking-table .date-col { width: 7.8rem; }
+                .ranking-table .elapsed-col { width: 12rem; }
+                .ranking-table tr.rank-1 td { background: #fff3cd; }
+                .ranking-table tr.rank-2 td { background: #e2e3e5; }
+                .ranking-table tr.rank-3 td { background: #f8d7da; }
+                @media (max-width: 700px) {
+                    .ranking-table-wrap { max-height: 66vh; overflow-x: hidden; }
+                    .ranking-table th, .ranking-table td { padding: .56rem .48rem; font-size: .9rem; }
+                    .ranking-table .rank-col { width: 2.8rem; }
+                    .ranking-table .count-col { display: none; }
+                    .ranking-table .mobile-metric-col { display: table-cell; width: 5.8rem; text-align: right; font-weight: 800; }
+                    .ranking-table .date-col, .ranking-table .elapsed-col { display: none; }
                 }
+                </style>
+                """,
+                unsafe_allow_html=True,
+            )
+            ranking_rows = []
+            mobile_metric_label = count_col_name if rank_order in {"多い順", "少ない順"} else "前回からの経過"
+            for _, ranking_row in display_rank.iterrows():
+                rank_number = int(ranking_row["順位"])
+                row_class = f"rank-{rank_number}" if rank_number in {1, 2, 3} else ""
+                mobile_metric = ranking_row[count_col_name] if rank_order in {"多い順", "少ない順"} else ranking_row["前回からの経過"]
+                ranking_rows.append(
+                    "<tr class='{row_class}'><td class='rank-col'>{rank}</td><td>{name}</td>"
+                    "<td class='count-col'>{count}</td><td class='mobile-metric-col'>{mobile_metric}</td><td class='date-col'>{last_date}</td>"
+                    "<td class='elapsed-col'>{elapsed}</td></tr>".format(
+                        row_class=row_class,
+                        rank=rank_number,
+                        name=html.escape(str(ranking_row[rank_target])),
+                        count=html.escape(str(ranking_row[count_col_name])),
+                        mobile_metric=html.escape(str(mobile_metric)),
+                        last_date=html.escape(str(ranking_row["最終披露日"])),
+                        elapsed=html.escape(str(ranking_row["前回からの経過"])),
+                    )
+                )
+            st.markdown(
+                "<div class='ranking-table-wrap'><table class='ranking-table'><thead><tr>"
+                f"<th class='rank-col'>順位</th><th>{html.escape(rank_target)}</th>"
+                f"<th class='count-col'>{html.escape(count_col_name)}</th><th class='mobile-metric-col'>{html.escape(mobile_metric_label)}</th>"
+                "<th class='date-col'>最終披露日</th><th class='elapsed-col'>前回からの経過</th>"
+                "</tr></thead><tbody>" + "".join(ranking_rows) + "</tbody></table></div>",
+                unsafe_allow_html=True,
+            )
+            ranking_highlights = [
+                (
+                    f"{row['順位']}位　{row[rank_target]}",
+                    f"{count_col_name} {row[count_col_name]}／前回披露 {row['前回からの経過']}",
+                )
+                for _, row in display_rank.head(8).iterrows()
+            ]
+            render_analysis_report_download(
+                f"{rank_target}ランキング",
+                f"{rank_order}／現在の絞り込み条件",
+                [
+                    ("集計対象", rank_target),
+                    ("並び替え", rank_order),
+                    ("表示件数", f"{len(display_rank)}件"),
+                    ("対象公演数", f"{ranking_df[live_col_name].nunique() if live_col_name else 0}公演"),
+                ],
+                ranking_highlights,
+                key="download_ranking_report_png",
             )
         else:
             st.info("該当するデータがありません。")
@@ -2832,30 +3590,51 @@ if os.path.exists(SETLIST_FILE):
         st.session_state.selected_tab1_cats &= set(available_cats)
         filter_year_col, filter_category_col = st.columns(2)
         with filter_year_col:
-            selected_tab1_year_values = st.multiselect(
-                "📅 開催年",
-                available_years,
-                default=[
-                    year for year in available_years
-                    if year in st.session_state.selected_tab1_years
-                ],
-                format_func=lambda year: f"{year}年",
-                key="tab1_year_multiselect",
-            )
-            st.session_state.selected_tab1_years = set(selected_tab1_year_values)
+            st.caption("📅 開催年")
+            year_actions = st.columns(2)
+            if year_actions[0].button("すべて選択", key="tab1_select_all_years", use_container_width=True):
+                st.session_state.selected_tab1_years = set(available_years)
+                st.rerun()
+            if year_actions[1].button("すべて解除", key="tab1_clear_years", use_container_width=True):
+                st.session_state.selected_tab1_years = set()
+                st.rerun()
+            year_buttons = st.columns(5)
+            for index, year in enumerate(available_years):
+                is_selected = year in st.session_state.selected_tab1_years
+                if year_buttons[index % len(year_buttons)].button(
+                    f"{year}年",
+                    key=f"tab1_year_button_{year}",
+                    type="primary" if is_selected else "secondary",
+                    use_container_width=True,
+                ):
+                    if is_selected:
+                        st.session_state.selected_tab1_years.discard(year)
+                    else:
+                        st.session_state.selected_tab1_years.add(year)
+                    st.rerun()
         with filter_category_col:
-            selected_tab1_category_values = st.multiselect(
-                "🏷️ 公演区分",
-                available_cats,
-                default=[
-                    category for category in available_cats
-                    if category in st.session_state.selected_tab1_cats
-                ],
-                key="tab1_category_multiselect",
-            )
-            st.session_state.selected_tab1_cats = set(
-                selected_tab1_category_values
-            )
+            st.caption("🏷️ 公演区分")
+            category_actions = st.columns(2)
+            if category_actions[0].button("すべて選択", key="tab1_select_all_categories", use_container_width=True):
+                st.session_state.selected_tab1_cats = set(available_cats)
+                st.rerun()
+            if category_actions[1].button("すべて解除", key="tab1_clear_categories", use_container_width=True):
+                st.session_state.selected_tab1_cats = set()
+                st.rerun()
+            category_buttons = st.columns(3)
+            for index, category in enumerate(available_cats):
+                is_selected = category in st.session_state.selected_tab1_cats
+                if category_buttons[index % len(category_buttons)].button(
+                    str(category),
+                    key=f"tab1_category_button_{category}",
+                    type="primary" if is_selected else "secondary",
+                    use_container_width=True,
+                ):
+                    if is_selected:
+                        st.session_state.selected_tab1_cats.discard(category)
+                    else:
+                        st.session_state.selected_tab1_cats.add(category)
+                    st.rerun()
 
         filtered_live_df = df[
             (df["開催年"].isin(st.session_state.selected_tab1_years)) & 
@@ -3003,7 +3782,7 @@ if os.path.exists(SETLIST_FILE):
                     )
 
     # TAB 2: 楽曲詳細分析
-    with tab2:
+    if selected_tab == tab_labels[2]:
         render_page_header(
             "🎵",
             "楽曲別データ分析",
@@ -3032,6 +3811,38 @@ if os.path.exists(SETLIST_FILE):
             if not song_album_df.empty else None
         )
 
+        # アルバム番号だけではユニットが分かりにくいため、楽曲別分析の表示だけに補足を付ける。
+        album_unit_labels = {
+            "イルミネーションスターズ": "イルミネ",
+            "アンティーカ": "アンティーカ",
+            "放課後クライマックスガールズ": "放クラ",
+            "アルストロメリア": "アルスト",
+            "ストレイライト": "ストレイ",
+            "ノクチル": "ノクチル",
+            "シーズ": "シーズ",
+            "コメティック": "コメティック",
+            "シャイニーカラーズ": "全体",
+        }
+        tab2_album_unit_map = {}
+        if not song_album_df.empty and song_alb_col and "歌唱者" in song_album_df.columns:
+            for album_name, album_rows in song_album_df.groupby(song_alb_col, dropna=True):
+                singer_units = unique_in_registered_order(
+                    [
+                        album_unit_labels[unit.strip()]
+                        for value in album_rows["歌唱者"].dropna().astype(str).tolist()
+                        for unit in re.split(r"[;；]", value)
+                        if unit.strip() in album_unit_labels
+                    ]
+                )
+                is_halo_around_album = "円環" in str(album_name) and "halo around" in str(album_name).lower()
+                if singer_units and (len(singer_units) == 1 or is_halo_around_album):
+                    tab2_album_unit_map[make_search_key(album_name)] = "／".join(singer_units)
+
+        def tab2_album_display_name(album_name):
+            album_text = str(album_name)
+            unit_label = tab2_album_unit_map.get(make_search_key(album_text), "")
+            return f"{album_text}（{unit_label}）" if unit_label else album_text
+
         sc1, sc2, sc3 = st.columns(3)
         with sc1:
             series_list = ["すべて"]
@@ -3046,10 +3857,25 @@ if os.path.exists(SETLIST_FILE):
                 if sel_series != "すべて" and series_col:
                     filtered_alb_df = filtered_alb_df[filtered_alb_df[series_col] == sel_series]
                 album_list += unique_in_registered_order(filtered_alb_df[alb_col].tolist())
-            sel_album = st.selectbox("2. アルバムを選択:", album_list, key="tab2_sel_album")
+            if (
+                not song_album_df.empty
+                and song_alb_col
+                and "アルバム未収録" in song_album_df[song_alb_col].astype(str).tolist()
+                and "アルバム未収録" not in album_list
+            ):
+                album_list.append("アルバム未収録")
+            sel_album = st.selectbox(
+                "2. アルバムを選択:",
+                album_list,
+                format_func=tab2_album_display_name,
+                key="tab2_sel_album",
+            )
 
         with sc3:
-            all_songs = unique_in_registered_order(analysis_base_df["集計用楽曲名"].tolist())
+            all_song_values = analysis_base_df["集計用楽曲名"].tolist()
+            if not song_album_df.empty and "楽曲名" in song_album_df.columns:
+                all_song_values += song_album_df["楽曲名"].dropna().astype(str).tolist()
+            all_songs = unique_in_registered_order(all_song_values)
             filtered_songs = []
 
             if not song_album_df.empty and "楽曲名" in song_album_df.columns and song_alb_col:
@@ -3138,7 +3964,6 @@ if os.path.exists(SETLIST_FILE):
                 youtube_video_variants_df,
                 sel_album,
                 migratory_echoes_media_df,
-                youtube_album_preview_df,
             )
 
             selected_album_row = pd.DataFrame()
@@ -3159,14 +3984,18 @@ if os.path.exists(SETLIST_FILE):
                 else (str(selected_album_row.iloc[0][song_alb_col]) if not selected_album_row.empty else "")
             )
             selected_jacket_path = get_song_jacket_path(selected_song, selected_album) if selected_album else None
+            album_preview_options = build_album_preview_options(
+                selected_album,
+                youtube_album_preview_df,
+            )
             jacket_col, album_info_col, media_col = st.columns([1, 1.35, 1.35])
             with jacket_col:
                 if selected_jacket_path:
                     st.image(selected_jacket_path, use_container_width=True)
             with album_info_col:
                 if selected_album:
-                    st.subheader("💿 収録アルバム")
-                    st.markdown(f"**{selected_album}**")
+                    st.subheader("💿 収録情報" if selected_album == "アルバム未収録" else "💿 収録アルバム")
+                    st.markdown(f"**{tab2_album_display_name(selected_album)}**")
                     if series_col and not album_master_df.empty and alb_col:
                         album_master_keys = (
                             album_master_df["_album_search_key"]
@@ -3178,6 +4007,17 @@ if os.path.exists(SETLIST_FILE):
                         ]
                         if not series_match.empty:
                             st.caption(f"シリーズ: {series_match.iloc[0][series_col]}")
+                    if album_preview_options:
+                        st.markdown("##### ▶️ 視聴動画")
+                        selected_preview_index = st.selectbox(
+                            "視聴する動画を選択:",
+                            range(len(album_preview_options)),
+                            format_func=lambda index: album_preview_options[index]["表示"],
+                            key=f"tab2_album_preview_{make_search_key(selected_song)}",
+                        )
+                        selected_preview = album_preview_options[selected_preview_index]
+                        render_compact_youtube(selected_preview["URL"], selected_preview["表示"])
+                        st.link_button("YouTubeで開く", selected_preview["URL"])
             with media_col:
                 if song_media_options:
                     st.subheader("▶️ 公式音源・MV")
@@ -3193,6 +4033,36 @@ if os.path.exists(SETLIST_FILE):
                     st.link_button("YouTubeで開く", selected_media["URL"])
                 else:
                     st.caption("公式YouTubeコンテンツは、まだ登録されていません。")
+
+            if not selected_album_row.empty:
+                selected_song_metadata = selected_album_row.iloc[0]
+                game_metadata_labels = [
+                    ("ユニット版収録", "ユニット版収録"),
+                    ("ソロコレ", "ソロコレ収録"),
+                    ("ソロコレ発売日", "ソロコレ発売日"),
+                    ("初収録CDソロ歌唱", "初収録CDのソロ歌唱"),
+                    ("enza実装", "enza実装"),
+                    ("シャニソン実装", "シャニソン実装"),
+                    ("シャニソン周期", "シャニソンでの追加周期"),
+                    ("歓声追加", "歓声追加"),
+                    ("ソロ歌唱", "シャニソンでのソロ歌唱追加"),
+                    ("歌い分け", "歌い分け"),
+                    ("定点＆縦画面", "定点・縦画面"),
+                    ("視点追加", "視点追加"),
+                    ("MV公開", "MV公開"),
+                ]
+                game_metadata_rows = [
+                    {"項目": label, "日付・内容": str(selected_song_metadata.get(column, "")).strip()}
+                    for column, label in game_metadata_labels
+                    if str(selected_song_metadata.get(column, "")).strip()
+                ]
+                if game_metadata_rows:
+                    st.subheader("🎮 ゲーム・映像関連")
+                    st.dataframe(
+                        pd.DataFrame(game_metadata_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
 
             st.markdown("---")
 
@@ -3248,7 +4118,105 @@ if os.path.exists(SETLIST_FILE):
             )
 
     # TAB 3: 歌唱者（キャスト/アイドル）× 楽曲・衣装分析
-    with tab3:
+        if "display_song_df" in locals() and selected_song:
+            song_ranking_base = analysis_base_df.groupby("集計用楽曲名").agg(
+                披露回数=("集計用楽曲名", "count"),
+                最新披露日=("日付_dt", "max"),
+            ).dropna(subset=["最新披露日"])
+            song_ranking_base["前回披露からの日数"] = (
+                pd.to_datetime(datetime.now().date()) - song_ranking_base["最新披露日"]
+            ).dt.days
+            song_ranking_base["披露回数順位"] = song_ranking_base["披露回数"].rank(
+                method="min", ascending=False
+            ).astype(int)
+            song_ranking_base["間隔順位"] = song_ranking_base["前回披露からの日数"].rank(
+                method="min", ascending=False
+            ).astype(int)
+            song_rank_row = song_ranking_base.loc[selected_song] if selected_song in song_ranking_base.index else None
+            song_rank_total = len(song_ranking_base)
+            song_report_highlights = []
+            for _, report_row in song_df.head(6).iterrows():
+                event_name = str(report_row[live_col_name]) if live_col_name else "公演名未登録"
+                event_date = (
+                    report_row["日付_dt"].strftime("%Y/%m/%d")
+                    if pd.notna(report_row.get("日付_dt"))
+                    else "日付未登録"
+                )
+                song_report_highlights.append((event_name, event_date))
+            render_analysis_report_download(
+                f"{selected_song} 分析レポート",
+                "選択中の楽曲／披露履歴から集計",
+                [
+                    ("披露回数", f"{total_count}回"),
+                    ("収録情報", selected_album or "未登録"),
+                    ("初披露", first_date_str if not valid_dates.empty else "未登録"),
+                    ("最新披露", last_date_str if not valid_dates.empty else "未登録"),
+                    ("披露回数順位", f"{song_rank_row['披露回数順位']}位 / {song_rank_total}曲" if song_rank_row is not None else "集計対象外"),
+                    ("間隔順位", f"{song_rank_row['間隔順位']}位 / {song_rank_total}曲" if song_rank_row is not None else "集計対象外"),
+                ],
+                song_report_highlights,
+                key=f"download_song_report_{make_search_key(selected_song)}",
+                jacket_path=selected_jacket_path,
+            )
+
+    if selected_tab == tab_labels[16]:
+        render_page_header(
+            "📋",
+            "楽曲の実装・映像状況一覧",
+            "ゲーム実装、ソロ歌唱、歌い分け、映像など、各楽曲の登録状況をまとめて確認できます。",
+        )
+        if song_album_df.empty or "楽曲名" not in song_album_df.columns:
+            st.info("楽曲マスターを読み込めませんでした。")
+        else:
+            availability_columns = [
+                "楽曲名", "アルバム", "リリース日", "ユニット版収録", "ソロコレ", "ソロコレ発売日",
+                "初収録CDソロ歌唱", "enza実装", "シャニソン実装", "シャニソン周期",
+                "歓声追加", "ソロ歌唱", "歌い分け", "定点＆縦画面", "視点追加", "MV公開",
+            ]
+            availability_columns = [
+                column for column in availability_columns if column in song_album_df.columns
+            ]
+            availability_df = song_album_df[availability_columns].copy()
+
+            def solo_collection_display(row):
+                collection = str(row.get("ソロコレ", "")).strip()
+                if collection:
+                    return collection
+                if str(row.get("初収録CDソロ歌唱", "")).strip():
+                    return "初収録CDにソロ歌唱あり"
+                singers = [
+                    singer.strip()
+                    for singer in re.split(r"[;；]", str(row.get("歌唱者", "")))
+                    if singer.strip()
+                ]
+                if len(singers) == 1 and singers[0] in idol_list:
+                    return "もともとソロ曲"
+                return ""
+
+            if "ソロコレ" in availability_df.columns:
+                availability_df["ソロコレ"] = song_album_df.apply(
+                    solo_collection_display, axis=1
+                )
+            availability_df = availability_df.replace({"": "—"}).fillna("—")
+            availability_df = availability_df.set_index("楽曲名")
+            availability_df.index.name = "楽曲名"
+            st.dataframe(
+                availability_df,
+                use_container_width=True,
+                height=720,
+                hide_index=False,
+                column_config={
+                    "_index": st.column_config.TextColumn("楽曲名", width="large"),
+                    "アルバム": st.column_config.TextColumn("アルバム", width="medium"),
+                    "リリース日": st.column_config.TextColumn("アルバムリリース日", width="small"),
+                    "ユニット版収録": st.column_config.TextColumn("ユニット版収録", width="large"),
+                    "初収録CDソロ歌唱": st.column_config.TextColumn("初収録CDのソロ歌唱", width="large"),
+                    "ソロコレ": st.column_config.TextColumn("ソロコレ収録", width="medium"),
+                    "ソロコレ発売日": st.column_config.TextColumn("ソロコレ発売日", width="small"),
+                },
+            )
+
+    if selected_tab == tab_labels[3]:
         render_page_header(
             "🎤",
             "歌唱者・楽曲・衣装分析",
@@ -3312,6 +4280,18 @@ if os.path.exists(SETLIST_FILE):
             if person_unit:
                 person_groups.add(person_unit)
 
+            # ソロ衣装はユニット名ではなくアイドル名で登録されているため、
+            # キャスト／アイドルのどちらを選んでも本人の衣装だけを判定できるようにする。
+            person_costume_targets = {selected_person}
+            if selected_person in cast_to_idol_map:
+                person_costume_targets.add(cast_to_idol_map[selected_person])
+            if selected_person in idol_to_cast_map:
+                person_costume_targets.update(
+                    s.strip()
+                    for s in re.split(r"[;；]", idol_to_cast_map[selected_person])
+                    if s.strip()
+                )
+
             def find_person_costume(row, c_list):
                 # 5.5th Anniversary LIVE is a special case: the costume is
                 # determined by the member's unit, even for all-member songs.
@@ -3323,10 +4303,21 @@ if os.path.exists(SETLIST_FILE):
                             return override_costume
 
                 if len(c_list) == 1:
-                    return c_list[0]
+                    only_costume_target = costume_to_unit_map.get(c_list[0])
+                    if (
+                        only_costume_target in person_groups
+                        or only_costume_target in person_costume_targets
+                        or only_costume_target == "シャイニーカラーズ"
+                    ):
+                        return c_list[0]
+                    return None
 
                 for c_item in c_list:
-                    if costume_to_unit_map.get(c_item) in person_groups:
+                    costume_target = costume_to_unit_map.get(c_item)
+                    if (
+                        costume_target in person_groups
+                        or costume_target in person_costume_targets
+                    ):
                         return c_item
 
                 for c_item in c_list:
@@ -3439,7 +4430,9 @@ if os.path.exists(SETLIST_FILE):
                     if matched_c:
                         assigned_costume_by_index[row_index] = [matched_c]
                     else:
-                        assigned_costume_by_index[row_index] = c_list
+                        # 本人との対応を確認できない衣装は、誤った着用記録として
+                        # 表示しない。衣装名が並んだだけの公演データもここで除外する。
+                        assigned_costume_by_index[row_index] = []
 
                 person_costumes = [
                     costume
@@ -3542,7 +4535,7 @@ if os.path.exists(SETLIST_FILE):
                     st.info("※ 条件に一致する着用衣装データがありません。")
 
     # TAB 4: 衣装別データ分析
-    with tab4:
+    if selected_tab == tab_labels[4]:
         render_page_header(
             "👗",
             "衣装別データ分析",
@@ -3630,6 +4623,8 @@ if os.path.exists(SETLIST_FILE):
                             if c_unit_col: mc2.metric("対象ユニット/キャラ", str(m_info.iloc[0][c_unit_col]))
                             if c_type_col: mc3.metric("衣装区分", str(m_info.iloc[0][c_type_col]))
 
+                    render_costume_context_images(str(selected_costume))
+
                     st.markdown("---")
                     st.subheader("📊 着用（披露）実績")
                     m_c1, m_c2, m_c3, m_c4 = st.columns(4)
@@ -3680,7 +4675,7 @@ if os.path.exists(SETLIST_FILE):
             st.warning("⚠️ `songs.csv` に「衣装」を表す列が見つかりません。")
 
     # TAB 5: ランダムガチャ
-    with tab5:
+    if selected_tab == tab_labels[5]:
         render_page_header(
             "🎲",
             "今日のおすすめライブガチャ",
@@ -3706,9 +4701,10 @@ if os.path.exists(SETLIST_FILE):
             gc3.metric("👗 着用衣装", str(g_row.get("衣装", "-")))
 
             st.markdown(f"**🎤 歌唱キャスト/アイドル:** {g_row.get('歌唱者', '-')}")
+            render_gacha_context_images()
 
     # TAB 6: データ検索・全データ
-    with tab6:
+    if selected_tab == tab_labels[6]:
         render_page_header(
             "🔍",
             "データ検索・全データ",
@@ -3788,13 +4784,14 @@ if os.path.exists(SETLIST_FILE):
         )
 
     # TAB 7: 新規データ＆各種マスタ登録フォーム（全項目網羅版）
-    with tab7:
+    if selected_tab == tab_labels[7]:
         render_page_header(
             "➕",
             "データ管理",
             "よく使う登録は専用フォームから、細かな修正はCSV編集から行えます。保存前に内容を確認できます。",
         )
         register_modes = [
+            "🧭 新着情報から更新する",
             "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
             "👗 衣装マスタ追加",
             "🎵 アルバム・楽曲マスタ追加",
@@ -3803,6 +4800,8 @@ if os.path.exists(SETLIST_FILE):
             "📝 楽曲の分類・歌詞・公式リンクを登録",
             "🖼️ ジャケット情報を登録",
             "👥 出演・参加履歴をまとめて登録",
+            "🧩 統合リンクを登録",
+            "🌐 公開版へ反映",
             "🗃️ 全CSVを追加・編集",
         ]
         if st.session_state.get("tab7_register_mode") not in register_modes:
@@ -3823,8 +4822,420 @@ if os.path.exists(SETLIST_FILE):
 
         st.markdown("---")
 
-        if register_mode == "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録":
-            st.subheader("🎤 新公演セットリスト ＆ 公演マスタ同時登録")
+        if register_mode == "🧭 新着情報から更新する":
+            st.subheader("🧭 新しい情報を登録する")
+            st.caption("更新したい内容を選ぶと、必要な登録先と入力欄だけを表示します。CSVを直接編集する必要はありません。")
+
+            def _file_updated_at(file_path):
+                if not os.path.exists(file_path):
+                    return "未作成"
+                return datetime.fromtimestamp(os.path.getmtime(file_path)).strftime("%Y/%m/%d %H:%M")
+
+            def _latest_label(dataframe, date_column, title_column, fallback="未登録"):
+                if dataframe is None or dataframe.empty or title_column not in dataframe.columns:
+                    return fallback
+                latest_rows = dataframe.copy()
+                if date_column in latest_rows.columns:
+                    latest_rows["_guide_date"] = pd.to_datetime(
+                        latest_rows[date_column].astype(str).str.replace(r"\([^)]*\)", "", regex=True),
+                        errors="coerce",
+                    )
+                    if latest_rows["_guide_date"].notna().any():
+                        latest_rows = latest_rows.sort_values("_guide_date", ascending=False)
+                row = latest_rows.iloc[0]
+                title = str(row.get(title_column, "")).strip()
+                date_text = str(row.get(date_column, "")).strip() if date_column in row.index else ""
+                return f"{date_text}　{title}".strip() or fallback
+
+            def _next_label(dataframe, date_column, title_column, fallback="予定なし"):
+                if dataframe is None or dataframe.empty or title_column not in dataframe.columns:
+                    return fallback
+                if date_column not in dataframe.columns:
+                    return fallback
+                upcoming_rows = dataframe.copy()
+                upcoming_rows["_guide_date"] = pd.to_datetime(
+                    upcoming_rows[date_column].astype(str).str.replace(r"\([^)]*\)", "", regex=True),
+                    errors="coerce",
+                )
+                today = pd.Timestamp.today().normalize()
+                upcoming_rows = upcoming_rows[upcoming_rows["_guide_date"] >= today]
+                if upcoming_rows.empty:
+                    return fallback
+                row = upcoming_rows.sort_values("_guide_date").iloc[0]
+                return f"{row[date_column]}　{row[title_column]}"
+
+            def _next_release_label():
+                if upcoming_releases_df.empty or not {"発売日", "アルバム名"}.issubset(upcoming_releases_df.columns):
+                    return _next_label(song_album_df, "リリース日", "アルバム")
+                future_releases = upcoming_releases_df[
+                    upcoming_releases_df["発売日_dt"] >= pd.Timestamp.today().normalize()
+                ]
+                if future_releases.empty:
+                    return _next_label(song_album_df, "リリース日", "アルバム")
+                row = future_releases.sort_values("発売日_dt").iloc[0]
+                return f'{row["発売日"]}　{row["アルバム名"]}'
+
+            latest_mv = "未登録"
+            if not youtube_video_variants_df.empty:
+                mv_row = youtube_video_variants_df.iloc[-1]
+                latest_mv = "　".join(
+                    value for value in [
+                        str(mv_row.get("楽曲名", "")).strip(),
+                        str(mv_row.get("種別", "")).strip(),
+                    ] if value
+                ) or "登録済み"
+
+            st.markdown("##### 現在の最新登録")
+            latest_status_df = pd.DataFrame([
+                {
+                    "種類": "🏟️ 公演",
+                    "現在登録済みの最新": _latest_label(event_df, "日付", "公演名"),
+                    "データ更新": _file_updated_at(EVENT_MASTER_FILE),
+                },
+                {
+                    "種類": "💿 CD・アルバム",
+                    "現在登録済みの最新": _latest_label(song_album_df, "リリース日", "アルバム"),
+                    "データ更新": _file_updated_at(SONG_ALBUM_FILE),
+                },
+                {
+                    "種類": "🎬 MV・公式動画",
+                    "現在登録済みの最新": latest_mv,
+                    "データ更新": _file_updated_at(YOUTUBE_VIDEO_VARIANTS_FILE),
+                },
+                {
+                    "種類": "📺 公式生配信・番組",
+                    "現在登録済みの最新": _latest_label(broadcast_df, "初回放送", "放送内容"),
+                    "データ更新": _file_updated_at(BROADCAST_FILE),
+                },
+                {
+                    "種類": "📻 シャニラジ",
+                    "現在登録済みの最新": _latest_label(radio_episode_df, "初回放送", "出演回"),
+                    "データ更新": _file_updated_at(RADIO_MASTER_FILE),
+                },
+            ])
+            st.dataframe(
+                latest_status_df,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "種類": st.column_config.TextColumn("種類", width="medium"),
+                    "現在登録済みの最新": st.column_config.TextColumn("現在登録済みの最新", width="large"),
+                    "データ更新": st.column_config.TextColumn("データ更新", width="medium"),
+                },
+            )
+
+            st.markdown("##### 📅 発表済みの今後の予定")
+            st.dataframe(
+                pd.DataFrame([
+                    ["🏟️ 次の公演", _next_label(event_df, "日付", "公演名")],
+                    ["💿 次のCD・アルバム", _next_release_label()],
+                ], columns=["種類", "内容"]),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            # 将来日のデータで、後から埋める必要がありそうな情報を自動で案内する。
+            pending_update_rows = []
+            today = pd.Timestamp.today().normalize()
+            if not event_df.empty and {"日付", "公演名"}.issubset(event_df.columns):
+                future_events = event_df.copy()
+                future_events["_guide_date"] = pd.to_datetime(future_events["日付"], errors="coerce")
+                future_events = future_events[future_events["_guide_date"] >= today]
+                setlist_event_keys = set(df.get("live_search_key", pd.Series(dtype=str)).dropna())
+                attendance_event_keys = set(
+                    attendance_df.get("公演名", pd.Series(dtype=str)).dropna().map(
+                        lambda value: make_search_key(re.sub(r"DAY\s*\d+", "", str(value), flags=re.IGNORECASE))
+                    )
+                )
+                for _, upcoming_event in future_events.iterrows():
+                    event_name = str(upcoming_event["公演名"]).strip()
+                    event_key = make_search_key(event_name)
+                    event_base_key = make_search_key(
+                        re.sub(r"DAY\s*\d+", "", event_name, flags=re.IGNORECASE)
+                    )
+                    missing_items = []
+                    venue = str(upcoming_event.get("会場", "")).strip()
+                    if not venue or re.search(r"都内某所|未定|tbd|当選者", venue, flags=re.IGNORECASE):
+                        missing_items.append("会場")
+                    if event_key not in setlist_event_keys:
+                        missing_items.append("セットリスト")
+                    if event_base_key not in attendance_event_keys:
+                        missing_items.append("出演・参加情報")
+                    if missing_items:
+                        pending_update_rows.append({
+                            "種類": "🏟️ 公演",
+                            "対象": f'{upcoming_event["日付"]}　{event_name}',
+                            "あとで更新する項目": "・".join(missing_items),
+                        })
+
+            if not song_album_df.empty and {"リリース日", "アルバム"}.issubset(song_album_df.columns):
+                future_albums = song_album_df.copy()
+                future_albums["_guide_date"] = pd.to_datetime(future_albums["リリース日"], errors="coerce")
+                future_albums = future_albums[future_albums["_guide_date"] >= today]
+                for album_name, album_rows in future_albums.groupby("アルバム", dropna=True):
+                    if make_search_key(album_name) not in album_jacket_map:
+                        pending_update_rows.append({
+                            "種類": "💿 CD・アルバム",
+                            "対象": f'{album_rows.iloc[0]["リリース日"]}　{album_name}',
+                            "あとで更新する項目": "ジャケット画像",
+                        })
+
+            if not upcoming_releases_df.empty and {"発売日", "アルバム名"}.issubset(upcoming_releases_df.columns):
+                for _, upcoming_release in upcoming_releases_df[
+                    upcoming_releases_df["発売日_dt"] >= today
+                ].iterrows():
+                    album_name = str(upcoming_release["アルバム名"])
+                    if make_search_key(album_name) not in album_jacket_map:
+                        pending_update_rows.append({
+                            "種類": "💿 CD・アルバム",
+                            "対象": f'{upcoming_release["発売日"]}　{album_name}',
+                            "あとで更新する項目": "収録曲・ジャケット画像",
+                        })
+
+            if not broadcast_df.empty and {"初回放送", "放送内容"}.issubset(broadcast_df.columns):
+                future_broadcasts = broadcast_df.copy()
+                future_broadcasts["_guide_date"] = pd.to_datetime(
+                    future_broadcasts["初回放送"].astype(str).str.replace(r"\([^)]*\)", "", regex=True),
+                    errors="coerce",
+                )
+                future_broadcasts = future_broadcasts[future_broadcasts["_guide_date"] >= today]
+                for _, broadcast in future_broadcasts.iterrows():
+                    missing_items = []
+                    if not str(broadcast.get("出演者", "")).strip():
+                        missing_items.append("出演者")
+                    if not str(broadcast.get("URL", "")).strip():
+                        missing_items.append("番組URL")
+                    if missing_items:
+                        pending_update_rows.append({
+                            "種類": "📺 公式番組",
+                            "対象": f'{broadcast["初回放送"]}　{broadcast["放送内容"]}',
+                            "あとで更新する項目": "・".join(missing_items),
+                        })
+
+            st.markdown("##### 🔔 後から更新が必要なデータ")
+            if pending_update_rows:
+                st.dataframe(
+                    pd.DataFrame(pending_update_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                    column_config={
+                        "種類": st.column_config.TextColumn("種類", width="medium"),
+                        "対象": st.column_config.TextColumn("対象", width="large"),
+                        "あとで更新する項目": st.column_config.TextColumn("あとで更新する項目", width="medium"),
+                    },
+                )
+            else:
+                st.success("現在登録済みの将来予定に、未入力として検出できる項目はありません。")
+
+            with st.expander("🗂️ このサイトで管理しているデータ一覧", expanded=False):
+                st.caption("新しい情報が出たときは、該当する行を目安に更新してください。空欄の情報は、判明してから後追いで追加できます。")
+                st.dataframe(
+                    pd.DataFrame([
+                        ["公演", "公演名・日付・会場・公演区分／判明後はセットリスト・歌唱者・衣装", "新しい公演"],
+                        ["CD・アルバム", "CD名・シリーズ・発売日・収録曲・歌唱者", "新しいCD・アルバム"],
+                        ["楽曲情報", "楽曲区分・歌詞・公式音源・MV・視聴動画", "新しいMV・公式動画／楽曲の分類・歌詞の追加・変更"],
+                        ["ジャケット", "画像ファイルとアルバム／楽曲の対応", "ジャケット画像の追加・変更"],
+                        ["衣装", "衣装名・シリーズ・対象・衣装区分", "新しい衣装"],
+                        ["カード・シナリオ", "アイドル・ゲーム・P/S・レア度・名称・実装日", "新しいカード・シナリオ"],
+                        ["出演・参加", "公演ごとの参加・一部参加・欠席・追加参加", "出演・参加状況の追加・変更"],
+                        ["公式番組・生配信", "番組名・日時・出演者・URL", "公式生配信・番組"],
+                        ["シャニラジ", "回数・放送内容・日時／分かれば出演者", "次回シャニラジ"],
+                        ["アイドル・キャスト", "名前とユニット所属", "アイドル・キャスト情報の追加・変更"],
+                    ]),
+                    column_config={
+                        0: st.column_config.TextColumn("種類", width="medium"),
+                        1: st.column_config.TextColumn("必要な情報", width="large"),
+                        2: st.column_config.TextColumn("更新ナビで選ぶ項目", width="large"),
+                    },
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            update_kind = st.selectbox(
+                "何が新しく発表・公開されましたか？",
+                [
+                    "新しい公演",
+                    "開催予定の公演",
+                    "新しいCD・アルバム",
+                    "発売予定のCD・アルバム",
+                    "新しいMV・公式動画",
+                    "公式生配信・番組",
+                    "次回シャニラジ",
+                    "新しいカード・シナリオ",
+                    "新しい衣装",
+                    "アイドル・キャスト情報の追加・変更",
+                    "出演・参加状況の追加・変更",
+                    "楽曲の分類・歌詞の追加・変更",
+                    "ジャケット画像の追加・変更",
+                ],
+                key="guided_update_kind",
+            )
+
+            guided_modes = {
+                "新しい公演": "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
+                "開催予定の公演": "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
+                "新しいCD・アルバム": "🎵 アルバム・楽曲マスタ追加",
+                "発売予定のCD・アルバム": "🎵 アルバム・楽曲マスタ追加",
+                "新しいMV・公式動画": "🧩 統合リンクを登録",
+                "新しいカード・シナリオ": "🃏 カード・シナリオ実装を登録",
+                "新しい衣装": "👗 衣装マスタ追加",
+                "アイドル・キャスト情報の追加・変更": "👤 アイドル・キャストを追加",
+                "出演・参加状況の追加・変更": "👥 出演・参加履歴をまとめて登録",
+                "楽曲の分類・歌詞の追加・変更": "📝 楽曲の分類・歌詞・公式リンクを登録",
+                "ジャケット画像の追加・変更": "🖼️ ジャケット情報を登録",
+            }
+            guidance = {
+                "新しい公演": [
+                    "公演名・日付・会場・公演区分を登録します。",
+                    "セットリストが判明したら、同じ画面で曲順・歌唱者・衣装も追加できます。",
+                ],
+                "開催予定の公演": [
+                    "公演名・日付・会場・公演区分だけ先に登録できます。セットリストは未発表なら空欄で大丈夫です。",
+                    "後からセットリストが出たら、同じ公演名でセットリストを追加してください。",
+                ],
+                "新しいCD・アルバム": [
+                    "CD名・シリーズ名・収録曲・発売日を登録します。",
+                    "ジャケットは必要になった時点で、次に『ジャケット情報を登録』から追加できます。",
+                ],
+                "発売予定のCD・アルバム": [
+                    "発売日とCD名だけ先に登録できます。収録曲が未発表なら空欄で大丈夫です。",
+                    "収録曲やジャケットが公開されたら、後から追加できます。",
+                ],
+                "新しいMV・公式動画": [
+                    "楽曲名とYouTube URLを入力します。",
+                    "登録先は『MV・視聴動画』を選べば大丈夫です。アルバム未収録のMVも登録できます。",
+                ],
+                "公式生配信・番組": [
+                    "番組名・初回放送日時・出演者を登録します。URLは発表済みの場合だけで構いません。",
+                ],
+                "次回シャニラジ": [
+                    "回数・放送内容・初回放送日時を登録します。出演者の情報は分かった時点で、出演履歴の登録画面から追加できます。",
+                ],
+                "新しいカード・シナリオ": [
+                    "カードならアイドル・ゲーム・P/S・レア度・カード名・実装日を入力します。",
+                    "カードに紐づくシナリオやコミュも、同じ画面から追加できます。",
+                ],
+                "新しい衣装": [
+                    "衣装名・シリーズ・対象ユニット／キャラ・衣装区分を登録します。",
+                ],
+                "アイドル・キャスト情報の追加・変更": [
+                    "アイドル名・キャスト名と、必要なら各ユニットへの所属を登録します。",
+                ],
+                "出演・参加状況の追加・変更": [
+                    "公演ごとの参加・一部参加・欠席・急遽不参加・追加参加を登録します。",
+                ],
+                "楽曲の分類・歌詞の追加・変更": [
+                    "楽曲区分、歌詞、公式音源など、曲に関する情報をまとめて登録します。",
+                ],
+                "ジャケット画像の追加・変更": [
+                    "画像ファイルを album_jackets フォルダへ入れてから、アルバム名または楽曲名と紐付けます。",
+                ],
+            }
+            st.markdown("##### 更新内容")
+            for guide_text in guidance[update_kind]:
+                st.write(f"・{guide_text}")
+
+            if update_kind in guided_modes:
+                if st.button("この内容を入力する", type="primary", key="open_guided_register_form"):
+                    st.session_state["tab7_register_mode"] = guided_modes[update_kind]
+                    st.rerun()
+
+            elif update_kind == "公式生配信・番組":
+                with st.form("guided_broadcast_form", clear_on_submit=True):
+                    broadcast_name = st.text_input("番組名 *", placeholder="例：アイドルマスター シャイニーカラーズ 新情報発表生配信")
+                    broadcast_date = st.date_input("放送日 *", datetime.now().date())
+                    broadcast_time = st.time_input("開始時刻（任意）", value=None)
+                    broadcast_casts = st.text_input("出演者（任意）", placeholder="例：関根瞳；近藤玲奈")
+                    broadcast_url = st.text_input("番組URL（任意）", placeholder="https://www.youtube.com/...")
+                    submit_broadcast = st.form_submit_button("💾 公式番組として登録", type="primary")
+                if submit_broadcast:
+                    if not broadcast_name.strip():
+                        st.error("番組名を入力してください。")
+                    else:
+                        broadcast_at = broadcast_date.strftime("%Y/%m/%d")
+                        if broadcast_time is not None:
+                            broadcast_at += f" {broadcast_time.strftime('%H:%M')}"
+                        append_csv_rows(
+                            BROADCAST_FILE,
+                            [{
+                                "放送内容": broadcast_name.strip(),
+                                "初回放送": broadcast_at,
+                                "出演者": broadcast_casts.strip(),
+                                "URL": broadcast_url.strip(),
+                            }],
+                            ["放送内容", "初回放送", "出演者", "URL"],
+                        )
+                        st.success("公式番組を登録しました。")
+                        st.rerun()
+
+            else:  # 次回シャニラジ
+                with st.form("guided_radio_form", clear_on_submit=True):
+                    radio_episode = st.text_input("回数 *", placeholder="例：400")
+                    radio_title = st.text_input("放送内容 *", placeholder="例：#400 アルストロメリア回")
+                    radio_date = st.date_input("放送日 *", datetime.now().date())
+                    radio_time = st.time_input("開始時刻（任意）", value=None)
+                    submit_radio = st.form_submit_button("💾 シャニラジ予定として登録", type="primary")
+                if submit_radio:
+                    if not radio_episode.strip().isdigit() or not radio_title.strip():
+                        st.error("回数は数字で、放送内容も入力してください。")
+                    else:
+                        radio_at = radio_date.strftime("%Y/%m/%d")
+                        if radio_time is not None:
+                            radio_at += f" {radio_time.strftime('%H:%M')}"
+                        append_radio_episode_row(radio_episode.strip(), radio_title.strip(), radio_at)
+                        st.success("次回シャニラジを登録しました。")
+                        st.rerun()
+
+        elif register_mode == "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録":
+            st.subheader("🎤 公演・セットリストを登録／更新")
+            st.info("同じ日付・公演名で保存すると、空欄は既存の値を残したまま更新します。セットリストは同じ曲順を更新し、新しい曲順は追加します。")
+
+            event_date_column = next((c for c in event_df.columns if "日付" in c), None)
+            event_title_column = next((c for c in event_df.columns if "公演" in c or "イベント" in c or "ライブ" in c), None)
+            event_type_column = next((c for c in event_df.columns if "区分" in c or "種別" in c), None)
+            event_venue_column = next((c for c in event_df.columns if "会場" in c), None)
+            planned_event_records = []
+            if event_date_column and event_title_column:
+                for event_row in event_df.to_dict("records"):
+                    event_date_value = pd.to_datetime(event_row.get(event_date_column, ""), errors="coerce")
+                    if pd.notna(event_date_value) and event_date_value.date() >= datetime.now().date():
+                        planned_event_records.append(
+                            {
+                                "label": f"{event_date_value.strftime('%Y/%m/%d')} ｜ {clean_text(str(event_row.get(event_title_column, '')))}",
+                                "date": event_date_value.date(),
+                                "title": clean_text(str(event_row.get(event_title_column, ""))),
+                                "type": clean_text(str(event_row.get(event_type_column, ""))) if event_type_column else "その他",
+                                "venue": clean_text(str(event_row.get(event_venue_column, ""))) if event_venue_column else "",
+                            }
+                        )
+
+            event_input_mode = st.radio(
+                "入力する公演",
+                ["新しい公演を入力", "予定済みの公演を選んで更新"],
+                horizontal=True,
+                key="setlist_event_input_mode",
+            )
+            selected_planned_event = None
+            if event_input_mode == "予定済みの公演を選んで更新" and planned_event_records:
+                planned_event_labels = [record["label"] for record in planned_event_records]
+                selected_label = st.selectbox("予定済みの公演", planned_event_labels, key="setlist_planned_event")
+                selected_planned_event = next(record for record in planned_event_records if record["label"] == selected_label)
+                st.caption("選んだ公演の日付・公演名・会場・区分を入れた状態で開きます。確定した会場やセットリストだけを追加してください。")
+            elif event_input_mode == "予定済みの公演を選んで更新":
+                st.info("現在、選択できる予定済みの公演はありません。")
+
+            if selected_planned_event:
+                event_form_seed = make_search_key(selected_planned_event["label"])
+                default_event_date = selected_planned_event["date"]
+                default_event_name = selected_planned_event["title"]
+                default_event_type = selected_planned_event["type"]
+                default_venue_name = selected_planned_event["venue"]
+            else:
+                event_form_seed = "new"
+                default_event_date = datetime.now().date()
+                default_event_name = ""
+                default_event_type = "キャストライブ"
+                default_venue_name = ""
             
             if "num_songs_to_add" not in st.session_state:
                 st.session_state.num_songs_to_add = 1
@@ -3849,12 +5260,14 @@ if os.path.exists(SETLIST_FILE):
             )
 
             with st.form("add_individual_songs_form"):
-                st.markdown("##### 🏟️ 公演情報（公演マスター `events.csv` にも自動登録されます）")
+                st.markdown("##### 🏟️ 公演情報（公演マスター `events.csv` に登録・更新されます）")
                 fc1, fc2, fc3, fc4 = st.columns(4)
-                with fc1: input_date = st.date_input("日付 *", datetime.now().date())
-                with fc2: input_live_name = st.text_input("公演名 *（例: 7thLIVE DAY1）")
-                with fc3: input_event_type = st.selectbox("公演区分 *", ["キャストライブ", "XR", "発売記念イベント", "合同", "外部", "その他"])
-                with fc4: input_venue_name = st.text_input("会場（例: Kアリーナ横浜）")
+                event_type_options = ["キャストライブ", "XR", "発売記念イベント", "合同", "外部", "その他"]
+                default_event_type_index = event_type_options.index(default_event_type) if default_event_type in event_type_options else 5
+                with fc1: input_date = st.date_input("日付 *", default_event_date, key=f"setlist_date_{event_form_seed}")
+                with fc2: input_live_name = st.text_input("公演名 *（例: 7thLIVE DAY1）", value=default_event_name, key=f"setlist_name_{event_form_seed}")
+                with fc3: input_event_type = st.selectbox("公演区分 *", event_type_options, index=default_event_type_index, key=f"setlist_type_{event_form_seed}")
+                with fc4: input_venue_name = st.text_input("会場（例: Kアリーナ横浜）", value=default_venue_name, key=f"setlist_venue_{event_form_seed}")
 
                 st.markdown("---")
                 st.markdown("##### 🎵 セットリスト楽曲情報")
@@ -3962,7 +5375,7 @@ if os.path.exists(SETLIST_FILE):
                         formatted_date = input_date.strftime("%Y/%m/%d")
                         clean_event_title = clean_live_name(input_live_name)
                         
-                        # 1. 公演マスター (events.csv) への一括追加処理
+                        # 1. 公演マスター (events.csv) へ。不足項目は既存値を残して更新する。
                         new_ev_row = [
                             {
                                 "日付": formatted_date,
@@ -3971,10 +5384,11 @@ if os.path.exists(SETLIST_FILE):
                                 "公演区分": input_event_type,
                             }
                         ]
-                        append_csv_rows(
+                        merge_csv_rows(
                             EVENT_MASTER_FILE,
                             new_ev_row,
                             ["日付", "公演名", "会場", "公演区分"],
+                            ["日付", "公演名"],
                         )
 
                         # 2. セットリスト (songs.csv) への保存処理
@@ -3992,14 +5406,15 @@ if os.path.exists(SETLIST_FILE):
                         ]
 
                         if valid_songs:
-                            append_csv_rows(
+                            merge_csv_rows(
                                 SETLIST_FILE,
                                 valid_songs,
                                 ["曲順", "日付", "公演名", "楽曲名", "ユニット", "歌唱者", "衣装"],
+                                ["日付", "公演名", "曲順"],
                             )
-                            st.success(f"🎉 公演「{clean_event_title}」のマスタ情報およびセットリスト ({len(valid_songs)} 曲) を一括保存しました！(F5キーで最新情報に更新)")
+                            st.success(f"🎉 公演「{clean_event_title}」の情報・セットリスト ({len(valid_songs)} 曲) を登録／更新しました！")
                         else:
-                            st.warning("⚠️ 公演マスタは追加されましたが、有効な楽曲名が入力されていないためセットリストは保存されませんでした。")
+                            st.info("公演情報を登録／更新しました。セットリストは未入力のため変更していません。")
 
         elif register_mode == "👗 衣装マスタ追加":
             st.subheader("👗 新規衣装マスタ追加 (`costumes.csv`)")
@@ -4034,7 +5449,8 @@ if os.path.exists(SETLIST_FILE):
                         st.success(f"🎉 衣装「{new_costume_name}」を保存しました！(F5キーで最新情報に更新)")
 
         elif register_mode == "🎵 アルバム・楽曲マスタ追加":
-            st.subheader("🎵 新規アルバム＆楽曲マスタ追加 (`albums.csv` / `songs_albums.csv`)")
+            st.subheader("🎵 アルバム・楽曲マスタを登録／更新 (`albums.csv` / `songs_albums.csv`)")
+            st.info("同じアルバム名・同じ収録曲名で保存すると、空欄は既存の値を残したまま更新します。")
             with st.form("add_album_form"):
                 ac1, ac2 = st.columns(2)
                 with ac1:
@@ -4042,8 +5458,11 @@ if os.path.exists(SETLIST_FILE):
                     new_series_name = st.text_input("アルバムシリーズ（例: CANVAS）")
                 with ac2:
                     new_release_date = st.date_input("発売日", datetime.now().date())
-                    new_album_singer = st.text_input("歌唱者（収録曲共通・任意）", placeholder="例: シャイニーカラーズ")
-                    new_album_songs = st.text_area("収録楽曲リスト（1行に1曲ずつ入力）")
+                    new_album_singer = st.text_input("歌唱者（共通・任意）", placeholder="例: シャイニーカラーズ（曲ごとの指定がない場合に使います）")
+                    new_album_songs = st.text_area(
+                        "収録楽曲リスト（1行に1曲。曲ごとの歌唱者も指定可）",
+                        placeholder="曲名 ｜ 歌唱者\n例: ソロ曲A ｜ 櫻木真乃\n例: 全体曲B ｜ シャイニーカラーズ\n※ 歌唱者を省略した行は、上の「歌唱者（共通）」を使います。",
+                    )
 
                 if st.form_submit_button("💾 アルバム＆楽曲マスタへ保存"):
                     if not new_album_name.strip():
@@ -4055,14 +5474,26 @@ if os.path.exists(SETLIST_FILE):
                                 "アルバムシリーズ": new_series_name.strip(),
                             }
                         ]
-                        append_csv_rows(
+                        merge_csv_rows(
                             ALBUM_MASTER_FILE,
                             new_alb_row,
                             ["アルバム名", "アルバムシリーズ"],
+                            ["アルバム名"],
                         )
 
-                        song_lines = [s.strip() for s in new_album_songs.split("\n") if s.strip()]
-                        if song_lines:
+                        song_entries = []
+                        for raw_line in new_album_songs.splitlines():
+                            raw_line = raw_line.strip()
+                            if not raw_line:
+                                continue
+                            parts = [part.strip() for part in re.split(r"[|\t]", raw_line, maxsplit=1)]
+                            song_entries.append(
+                                {
+                                    "楽曲名": parts[0],
+                                    "歌唱者": parts[1] if len(parts) > 1 and parts[1] else new_album_singer.strip(),
+                                }
+                            )
+                        if song_entries:
                             sa_df_old = load_csv(SONG_ALBUM_FILE) if os.path.exists(SONG_ALBUM_FILE) else pd.DataFrame()
                             if "Column 7" in sa_df_old.columns:
                                 song_numbers = pd.to_numeric(sa_df_old["Column 7"], errors="coerce")
@@ -4073,20 +5504,21 @@ if os.path.exists(SETLIST_FILE):
                             new_sa_rows = [
                                 {
                                     "Column 7": next_song_number + index,
-                                    "楽曲名": song_name,
+                                    "楽曲名": song_entry["楽曲名"],
                                     "アルバム": new_album_name.strip(),
                                     "リリース日": new_release_date.strftime("%Y/%m/%d"),
-                                    "歌唱者": new_album_singer.strip(),
+                                    "歌唱者": song_entry["歌唱者"],
                                 }
-                                for index, song_name in enumerate(song_lines)
+                                for index, song_entry in enumerate(song_entries)
                             ]
-                            append_csv_rows(
+                            merge_csv_rows(
                                 SONG_ALBUM_FILE,
                                 new_sa_rows,
                                 ["Column 7", "楽曲名", "アルバム", "リリース日", "歌唱者"],
+                                ["楽曲名", "アルバム"],
                             )
 
-                        st.success(f"🎉 アルバム「{new_album_name}」と収録楽曲 ({len(song_lines)}曲) を保存しました！(F5キーで最新情報に更新)")
+                        st.success(f"🎉 アルバム「{new_album_name}」と収録楽曲 ({len(song_entries)}曲) を登録／更新しました！")
 
         elif register_mode == "👤 アイドル・キャストを追加":
             st.subheader("👤 アイドル・キャストを追加")
@@ -4189,12 +5621,12 @@ if os.path.exists(SETLIST_FILE):
                             idol_list if idol_list else [""],
                             key="card_idol_name",
                         )
-                        selected_member_color = MEMBER_COLOR_MAP.get(card_idol_name)
-                        if selected_member_color:
+                        selected_member_background, selected_member_colors = member_color_swatch(card_idol_name)
+                        if selected_member_background:
                             st.markdown(
                                 f"<span style='display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;'>"
-                                f"<span style='width:1rem;height:1rem;border-radius:50%;background:{selected_member_color};border:1px solid #777;'></span>"
-                                f"イメージカラー {selected_member_color}</span>",
+                                f"<span style='width:1rem;height:1rem;border-radius:50%;background:{selected_member_background};border:1px solid #777;'></span>"
+                                f"イメージカラー（既存 / PJ:REFRAC7IONS） {selected_member_colors}</span>",
                                 unsafe_allow_html=True,
                             )
                         card_rarity = st.selectbox(
@@ -4213,6 +5645,7 @@ if os.path.exists(SETLIST_FILE):
                         )
 
                     st.markdown("##### まとめて貼り付ける場合")
+                    st.caption("各行の末尾に日付を追加できます。例：櫻木真乃 | P | SSR | カード名 | ガシャ | 2026/08/05　（日付なしなら上の共通日付を使用）")
                     bulk_card_text = st.text_area(
                         "1行に「アイドル｜P/S｜レア度｜カード名｜入手方法」。日付は上の実装日を共通で使用します。",
                         placeholder=(
@@ -4248,9 +5681,14 @@ if os.path.exists(SETLIST_FILE):
                         ]
                         if len(parts) < 4:
                             continue
-                        parts += [""] * (5 - len(parts))
+                        parts += [""] * (6 - len(parts))
                         if parts[1] not in {"P", "S"}:
                             continue
+                        row_implementation_date = implementation_date
+                        if parts[5]:
+                            parsed_date = pd.to_datetime(parts[5], errors="coerce")
+                            if pd.notna(parsed_date):
+                                row_implementation_date = parsed_date.strftime("%Y/%m/%d")
                         card_rows_to_save.append(
                             {
                                 "アイドル": parts[0],
@@ -4259,7 +5697,7 @@ if os.path.exists(SETLIST_FILE):
                                 "レア度": parts[2],
                                 "カード名": parts[3],
                                 "入手": parts[4],
-                                "実装日": implementation_date,
+                                "実装日": row_implementation_date,
                             }
                         )
 
@@ -4520,7 +5958,8 @@ if os.path.exists(SETLIST_FILE):
                     with day_col:
                         attendance_day = st.selectbox(
                             "日程・公演回:",
-                            ["DAY1", "DAY2", "DAY3", "昼公演", "夜公演", "開催"],
+                            ["DAY1", "DAY2", "DAY3", "第一回", "第二回", "昼公演", "夜公演", "開催"],
+                            help="発売記念イベントは、昼を「第一回」、夜を「第二回」として登録します。",
                         )
                     with default_col:
                         default_attendance_status = st.selectbox(
@@ -4614,6 +6053,203 @@ if os.path.exists(SETLIST_FILE):
                             st.success(f"{attendance_day}分の {len(new_attendance_rows)} 人を保存しました。")
                             st.rerun()
 
+        elif register_mode == "🧩 統合リンクを登録":
+            st.subheader("🧩 公式リンクをまとめて登録")
+            st.caption("入力した内容は、保存時に種類ごとのCSVへ自動で振り分けます。確認・修正は従来どおり個別CSVで行えます。")
+            unified_link_columns = ["登録先", "楽曲名", "対象アルバム", "対象公演", "種別", "表示名", "URL", "確認状態"]
+            st.caption("登録先を選び、必要な項目だけ入力してください。複数件を登録リストへためてから、まとめて保存できます。")
+            uploaded_link_csv = None
+            if uploaded_link_csv is not None:
+                try:
+                    incoming_links = pd.read_csv(uploaded_link_csv, encoding="utf-8-sig").fillna("")
+                except (UnicodeDecodeError, pd.errors.ParserError):
+                    st.error("CSVを読み込めませんでした。ひな形と同じ形式か確認してください。")
+                    incoming_links = pd.DataFrame()
+                missing_columns = [column for column in unified_link_columns if column not in incoming_links.columns]
+                if missing_columns:
+                    st.error("不足している列：" + "、".join(missing_columns))
+                elif not incoming_links.empty:
+                    st.dataframe(incoming_links, use_container_width=True, hide_index=True)
+                    if st.button("💾 種類ごとのCSVへ振り分けて登録", type="primary", key="import_unified_links"):
+                        destination_rows = {}
+                        destination_columns = {}
+                        route_map = {
+                            "公式音源": (YOUTUBE_AUDIO_DRAFT_FILE, ["楽曲名", "公式音源_URL", "2DMV_URL", "3DMV_URL", "公式音源状態", "確認状態"]),
+                            "音源別バージョン": (YOUTUBE_AUDIO_VARIANTS_FILE, ["楽曲名", "種別", "バージョン表示", "YouTube_URL", "確認状態"]),
+                            "MV・視聴動画": (YOUTUBE_VIDEO_VARIANTS_FILE, ["楽曲名", "種別", "バージョン表示", "YouTube_URL", "確認状態"]),
+                            "Migratory Echoesユニット版": (MIGRATORY_ECHOES_MEDIA_FILE, ["楽曲名", "対象アルバム", "YouTube_URL", "確認状態"]),
+                            "アルバム試聴": (YOUTUBE_ALBUM_PREVIEW_FILE, ["アルバム", "種別", "YouTube_URL"]),
+                            "ライブ映像": (YOUTUBE_LIVE_DIGEST_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"]),
+                            "AP生配信": (YOUTUBE_LIVE_AP_STREAM_FILE, ["対象公演", "種別", "YouTube_URL"]),
+                            "XR無料配信": (YOUTUBE_XR_INTRO_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"]),
+                            "公演公式サイト": (EVENT_OFFICIAL_SITE_FILE, ["対象公演", "公式サイトURL"]),
+                            "公演SNSリンク": (EVENT_SOCIAL_LINKS_FILE, ["対象公演", "種別", "URL"]),
+                        }
+                        skipped_rows = []
+                        for row_number, incoming_row in incoming_links.iterrows():
+                            row = {column: str(incoming_row.get(column, "")).strip() for column in unified_link_columns}
+                            route = route_map.get(row["登録先"])
+                            if not route or not row["URL"]:
+                                skipped_rows.append(row_number + 2)
+                                continue
+                            destination_file, expected_columns = route
+                            mapped_row = {
+                                "楽曲名": row["楽曲名"],
+                                "対象アルバム": row["対象アルバム"],
+                                "対象公演": row["対象公演"],
+                                "アルバム": row["対象アルバム"],
+                                "種別": row["種別"],
+                                "バージョン表示": row["表示名"],
+                                "YouTube_URL": row["URL"],
+                                "URL": row["URL"],
+                                "公式サイトURL": row["URL"],
+                                "公式音源_URL": row["URL"],
+                                "確認状態": row["確認状態"],
+                                "公式音源状態": row["確認状態"],
+                            }
+                            destination_rows.setdefault(destination_file, []).append(mapped_row)
+                            destination_columns[destination_file] = expected_columns
+                        for destination_file, rows in destination_rows.items():
+                            append_csv_rows(destination_file, rows, destination_columns[destination_file])
+                        if destination_rows:
+                            st.success(f"{sum(len(rows) for rows in destination_rows.values())}件を{len(destination_rows)}個のCSVへ登録しました。")
+                            if skipped_rows:
+                                st.warning("登録先またはURLが空のため、次の行は登録しませんでした：" + "、".join(map(str, skipped_rows)))
+                            st.rerun()
+                        else:
+                            st.warning("登録できる行がありません。登録先とURLを確認してください。")
+
+            link_destinations = {
+                "公式音源": (YOUTUBE_AUDIO_DRAFT_FILE, ["楽曲名", "公式音源_URL", "2DMV_URL", "3DMV_URL", "公式音源状態", "確認状態"], "楽曲名"),
+                "音源別バージョン": (YOUTUBE_AUDIO_VARIANTS_FILE, ["楽曲名", "種別", "バージョン表示", "YouTube_URL", "確認状態"], "楽曲名"),
+                "MV・視聴動画": (YOUTUBE_VIDEO_VARIANTS_FILE, ["楽曲名", "種別", "バージョン表示", "YouTube_URL", "確認状態"], "楽曲名"),
+                "Migratory Echoesユニット版": (MIGRATORY_ECHOES_MEDIA_FILE, ["楽曲名", "対象アルバム", "YouTube_URL", "確認状態"], "楽曲名"),
+                "アルバム試聴": (YOUTUBE_ALBUM_PREVIEW_FILE, ["アルバム", "種別", "YouTube_URL"], "対象アルバム"),
+                "ライブ映像": (YOUTUBE_LIVE_DIGEST_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"], "対象公演"),
+                "AP生配信": (YOUTUBE_LIVE_AP_STREAM_FILE, ["対象公演", "種別", "YouTube_URL"], "対象公演"),
+                "XR無料配信": (YOUTUBE_XR_INTRO_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"], "対象公演"),
+                "公演公式サイト": (EVENT_OFFICIAL_SITE_FILE, ["対象公演", "公式サイトURL"], "対象公演"),
+                "公演SNSリンク": (EVENT_SOCIAL_LINKS_FILE, ["対象公演", "種別", "URL"], "対象公演"),
+            }
+            if "unified_link_pending_rows" not in st.session_state:
+                st.session_state["unified_link_pending_rows"] = []
+            with st.form("unified_link_entry_form", clear_on_submit=True):
+                entry_destination = st.selectbox("登録先", list(link_destinations.keys()))
+                entry_col1, entry_col2 = st.columns(2)
+                with entry_col1:
+                    entry_song = st.text_input("楽曲名（楽曲のリンクの場合）")
+                    entry_album = st.text_input("対象アルバム（アルバム試聴・Migratory Echoes用）")
+                    entry_event = st.text_input("対象公演（ライブ映像・公演リンクの場合）")
+                with entry_col2:
+                    entry_type = st.text_input("種別", placeholder="例：MV、公式ライブ映像、公式サイト")
+                    entry_label = st.text_input("表示名（別バージョン名など・任意）")
+                    entry_status = st.selectbox("確認状態", ["確認済み", "要確認"], index=0)
+                entry_url = st.text_input("URL *", placeholder="https://www.youtube.com/watch?v=...")
+                add_pending_link = st.form_submit_button("＋ この内容を登録リストに追加", type="primary")
+            if add_pending_link:
+                _, _, required_field = link_destinations[entry_destination]
+                target_value = {"楽曲名": entry_song, "対象アルバム": entry_album, "対象公演": entry_event}[required_field]
+                if not target_value.strip() or not entry_url.strip():
+                    st.error(f"「{required_field}」とURLを入力してください。")
+                else:
+                    st.session_state["unified_link_pending_rows"].append({
+                        "登録先": entry_destination,
+                        "楽曲名": entry_song.strip(),
+                        "対象アルバム": entry_album.strip(),
+                        "対象公演": entry_event.strip(),
+                        "種別": entry_type.strip() or entry_destination,
+                        "表示名": entry_label.strip(),
+                        "URL": entry_url.strip(),
+                        "確認状態": entry_status,
+                    })
+                    st.rerun()
+
+            pending_link_rows = st.session_state["unified_link_pending_rows"]
+            if pending_link_rows:
+                st.markdown("##### 今回登録するリンク")
+                st.dataframe(pd.DataFrame(pending_link_rows), use_container_width=True, hide_index=True)
+                save_col, clear_col = st.columns(2)
+                if save_col.button("💾 このリストを個別CSVへ登録", type="primary", use_container_width=True):
+                    grouped_link_rows = {}
+                    for pending_row in pending_link_rows:
+                        destination_file, expected_columns, _ = link_destinations[pending_row["登録先"]]
+                        mapped_row = {
+                            "楽曲名": pending_row["楽曲名"],
+                            "対象アルバム": pending_row["対象アルバム"],
+                            "対象公演": pending_row["対象公演"],
+                            "アルバム": pending_row["対象アルバム"],
+                            "種別": pending_row["種別"],
+                            "バージョン表示": pending_row["表示名"],
+                            "YouTube_URL": pending_row["URL"],
+                            "URL": pending_row["URL"],
+                            "公式サイトURL": pending_row["URL"],
+                            "公式音源_URL": pending_row["URL"],
+                            "確認状態": pending_row["確認状態"],
+                            "公式音源状態": pending_row["確認状態"],
+                        }
+                        grouped_link_rows.setdefault(destination_file, {"columns": expected_columns, "rows": []})["rows"].append(mapped_row)
+                    for destination_file, payload in grouped_link_rows.items():
+                        append_csv_rows(destination_file, payload["rows"], payload["columns"])
+                    st.session_state["unified_link_pending_rows"] = []
+                    st.success("個別CSVへ登録しました。")
+                    st.rerun()
+                if clear_col.button("このリストを空にする", use_container_width=True):
+                    st.session_state["unified_link_pending_rows"] = []
+                    st.rerun()
+
+        elif register_mode == "🌐 公開版へ反映":
+            st.subheader("🌐 ローカルで確認したデータを公開版へ反映")
+            st.info(
+                "ここではローカルで編集したCSV・TSVだけを公開版へ送ります。"
+                "公開サイトの画面や管理機能は上書きしないため、安全です。"
+            )
+            st.caption(
+                "手順：①ローカルでデータを保存して確認 → ②下の確認ボタン → ③差分を確認して公開。"
+                "歌詞・ローカル画像・ジャケット画像は公開版へ送られません。"
+            )
+
+            if "public_sync_files" not in st.session_state:
+                st.session_state["public_sync_files"] = []
+
+            prepare_col, cancel_col = st.columns(2)
+            with prepare_col:
+                if st.button("① 公開前の変更を確認", type="primary", use_container_width=True):
+                    try:
+                        with st.spinner("公開用データを確認しています…"):
+                            st.session_state["public_sync_files"] = prepare_public_data_sync()
+                    except PublicPublishError as exc:
+                        st.error(f"確認できませんでした：{exc}")
+            with cancel_col:
+                if st.button("確認を取り消す", use_container_width=True):
+                    try:
+                        discard_prepared_public_data()
+                        st.session_state["public_sync_files"] = []
+                        st.success("確認用の変更を取り消しました。")
+                    except PublicPublishError as exc:
+                        st.error(f"取り消せませんでした：{exc}")
+
+            public_sync_files = st.session_state.get("public_sync_files", [])
+            if public_sync_files:
+                st.success(f"公開版で更新されるデータ：{len(public_sync_files)}件")
+                st.dataframe(
+                    pd.DataFrame({"更新するファイル": public_sync_files}),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                st.warning("内容をローカルで確認済みなら、次のボタンで公開版に送ります。")
+                if st.button("② 確認済み：公開版へ反映する", type="primary", use_container_width=True):
+                    try:
+                        with st.spinner("GitHubへ反映しています…"):
+                            result_message, published_files = publish_prepared_public_data()
+                        st.success(result_message)
+                        if published_files:
+                            st.caption("反映したファイル：" + "、".join(published_files))
+                        st.session_state["public_sync_files"] = []
+                    except PublicPublishError as exc:
+                        st.error(f"公開できませんでした：{exc}")
+            else:
+                st.caption("まだ公開前の変更は確認されていません。①から始めてください。")
+
         elif register_mode == "🗃️ 全CSVを追加・編集":
             st.subheader("🗃️ 全CSVを追加・編集")
             st.caption("対象のCSVを選んで、行の追加・既存データの修正・削除ができます。保存時には同じフォルダにバックアップを自動作成します。")
@@ -4631,6 +6267,7 @@ if os.path.exists(SETLIST_FILE):
                 "📺 公式番組・配信履歴（broadcasts.csv）": BROADCAST_FILE,
                 "🃏 カード実装履歴（cards.tsv）": CARD_FILE,
                 "📻 シャニラジ出演履歴（shiny_radio_appearances.csv）": RADIO_APPEARANCE_FILE,
+                "📻 シャニラジ統合マスター（shiny_radio_master.csv）": RADIO_MASTER_FILE,
                 "📻 シャニラジ各回データ（shiny_radio_episodes.tsv）": RADIO_EPISODE_FILE,
                 "🎙️ オーコメ担当・Blu-ray版": COMMENTARY_BD_FILE,
                 "🎙️ オーコメ担当・配信版": COMMENTARY_STREAM_FILE,
@@ -4649,10 +6286,81 @@ if os.path.exists(SETLIST_FILE):
                 "🕶️ XR冒頭無料映像": YOUTUBE_XR_INTRO_FILE,
                 "🌐 公演公式サイト": EVENT_OFFICIAL_SITE_FILE,
                 "💴 価格推移（price_history.csv）": PRICE_HISTORY_FILE,
+                "🎞️ ライブ映像の特典収録": LIVE_VIDEO_BONUS_FILE,
+                "💿 ライブBlu-rayカタログ": LIVE_BLU_RAY_CATALOG_FILE,
             }
+            # 手書きの一覧だけでなく、データフォルダ内のCSV・TSVをすべて編集対象にする。
+            data_directory = os.path.dirname(os.path.abspath(SETLIST_FILE))
+            discovered_data_files = sorted(
+                (
+                    path for path in Path(data_directory).iterdir()
+                    if path.is_file()
+                    and path.suffix.lower() in {".csv", ".tsv"}
+                    and "backup" not in path.name.casefold()
+                    and not path.name.startswith("~")
+                ),
+                key=lambda path: path.name.casefold(),
+            )
+            friendly_file_labels = {
+                "songs.csv": "公演セットリスト（基本データ）",
+                "events.csv": "公演の基本情報",
+                "idols.csv": "アイドル・キャスト対応表",
+                "costumes.csv": "衣装の基本情報",
+                "albums.csv": "アルバムの基本情報",
+                "songs_albums.csv": "楽曲と収録アルバムの対応",
+                "songs_categories.csv": "楽曲の分類",
+                "cast_attendance.csv": "キャスト出演・欠席履歴",
+                "youtube_media_links_draft.csv": "公式YouTube：音源リンク",
+                "youtube_media_variants_manual.csv": "公式YouTube：音源の別バージョン",
+                "youtube_migratory_echoes_media.csv": "公式YouTube：Migratory Echoes 各ユニット版",
+                "youtube_video_variants_manual.csv": "公式YouTube：MV・視聴動画",
+                "youtube_album_preview_links.csv": "公式YouTube：アルバム試聴動画",
+                "youtube_live_digest_links_manual.csv": "公式YouTube：ライブ映像",
+                "youtube_live_ap_stream_links.csv": "公式YouTube：AP生配信",
+                "youtube_xr_free_intro_links_manual.csv": "公式YouTube：XR冒頭無料配信",
+                "event_official_sites.csv": "公演公式サイトのリンク",
+                "event_social_links.csv": "公演公式Xなどのリンク",
+                "release_jackets.csv": "アルバムジャケットの対応表",
+                "song_jackets.csv": "楽曲ごとのジャケット指定",
+            }
+
+            def data_file_group(path):
+                name = path.name.casefold()
+                if name.startswith("youtube_"):
+                    return "動画・公式リンク"
+                if name in {"songs.csv", "events.csv", "idols.csv", "costumes.csv", "albums.csv", "songs_albums.csv", "songs_categories.csv", "cast_attendance.csv"}:
+                    return "基本データ"
+                return "その他"
+
+            file_group_filter = st.radio(
+                "表示する種類",
+                ["すべて", "基本データ", "動画・公式リンク", "その他"],
+                horizontal=True,
+                key="tab7_csv_group_filter",
+            )
+            if file_group_filter != "すべて":
+                discovered_data_files = [
+                    path for path in discovered_data_files
+                    if data_file_group(path) == file_group_filter
+                ]
             available_csv_targets = {
-                label: path for label, path in csv_targets.items() if path and os.path.exists(path)
+                f"📄 {friendly_file_labels.get(path.name, path.stem.replace('_', ' '))}　[{path.name}]": str(path)
+                for path in discovered_data_files
             }
+            csv_file_filter = st.text_input(
+                "ファイル名で絞り込む",
+                placeholder="例：songs、youtube、attendance",
+                key="tab7_csv_file_filter",
+            ).strip().casefold()
+            if csv_file_filter:
+                available_csv_targets = {
+                    label: path
+                    for label, path in available_csv_targets.items()
+                    if csv_file_filter in os.path.basename(path).casefold()
+                }
+            if not available_csv_targets:
+                st.info("一致するCSV・TSVがありません。")
+                st.stop()
             selected_csv_label = st.selectbox(
                 "編集するCSVを選択:",
                 list(available_csv_targets.keys()),
@@ -4660,6 +6368,14 @@ if os.path.exists(SETLIST_FILE):
             )
             selected_csv_path = available_csv_targets[selected_csv_label]
             selected_csv_df = load_csv(selected_csv_path).fillna("")
+
+            # 空欄を含む数値列はPandasがfloat化して「213.0」のように見えるため、
+            # CSV編集画面では元の文字表記として扱う。
+            selected_csv_df = selected_csv_df.map(
+                lambda value: str(int(value))
+                if isinstance(value, float) and value.is_integer()
+                else str(value)
+            )
 
             st.caption(f"{os.path.basename(selected_csv_path)} ｜ {len(selected_csv_df):,} 行 ｜ {len(selected_csv_df.columns)} 列")
             edited_csv_df = st.data_editor(
@@ -4681,13 +6397,581 @@ if os.path.exists(SETLIST_FILE):
                 )
                 st.rerun()
 
+    # ローカル専用: 配信を見ながら書き留めるセットリスト下書き
+    if not PUBLIC_MODE and selected_tab == "📝 ライブ中メモ":
+        render_page_header(
+            "📝",
+            "ライブ中セットリストメモ",
+            "配信を見ながら曲順を控えるための下書きです。正式データには自動反映されません。",
+        )
+        st.info("ここで作ったメモはCSVに保存されません。配信後に必要ならTSVで保存して、スプレッドシートへ貼り付けてください。")
+
+        draft_rows_key = "live_setlist_draft_rows"
+        if draft_rows_key not in st.session_state:
+            st.session_state[draft_rows_key] = []
+
+        draft_title = st.text_input(
+            "配信・公演名（任意）",
+            placeholder="例：○○ LIVE DAY1",
+            key="live_setlist_draft_title",
+        )
+        draft_unit_column = next((column for column in full_analysis_df.columns if "ユニット" in column), None)
+        idol_group_columns = [
+            column for column in member_group_columns
+            if not idol_df.empty and column in idol_df.columns
+        ]
+        if idol_group_columns:
+            draft_unit_options = unique_in_registered_order(
+                [
+                    unit.strip()
+                    for group_column in idol_group_columns
+                    for value in idol_df[group_column].dropna().astype(str).tolist()
+                    for unit in re.split(r"[;；]", value)
+                    if unit.strip() and unit.strip() not in {"nan", "その他"}
+                ]
+            )
+        else:
+            draft_unit_options = unique_in_registered_order(
+                [
+                    unit.strip()
+                    for value in full_analysis_df[draft_unit_column].dropna().astype(str).tolist()
+                    for unit in re.split(r"[;；]", value)
+                    if unit.strip() and unit.strip() not in {"nan", "その他"}
+                ]
+            ) if draft_unit_column else []
+        excluded_draft_participants = {"成海瑠奈"}
+        draft_participant_options = [
+            participant
+            for participant in unique_in_registered_order(cast_list + idol_list)
+            if participant not in excluded_draft_participants
+        ]
+        draft_context_left, draft_context_right = st.columns(2)
+        with draft_context_left:
+            selected_draft_units = st.multiselect(
+                "参加ユニット（任意）",
+                draft_unit_options,
+                key="live_setlist_draft_units",
+            )
+        with draft_context_right:
+            selected_draft_participants = st.multiselect(
+                "参加者（任意・歌唱者の入力候補に使います）",
+                draft_participant_options,
+                key="live_setlist_draft_participants",
+            )
+
+        bulk_participant_groups = {
+            group_name: [cast for cast in casts if cast in draft_participant_options]
+            for group_name, casts in group_to_casts_map.items()
+            if group_name and group_name != "nan" and casts
+        }
+        if bulk_participant_groups:
+            with st.expander("👥 枠組みから参加者をまとめて選ぶ", expanded=False):
+                def apply_all_casts(replace=False):
+                    current_members = st.session_state.get("live_setlist_draft_participants", [])
+                    st.session_state["live_setlist_draft_participants"] = (
+                        [cast for cast in cast_list if cast not in excluded_draft_participants]
+                        if replace
+                        else unique_in_registered_order(
+                            list(current_members)
+                            + [cast for cast in cast_list if cast not in excluded_draft_participants]
+                        )
+                    )
+
+                all_cast_add_col, all_cast_replace_col = st.columns(2)
+                all_cast_add_col.button(
+                    "キャスト全員を追加",
+                    key="live_setlist_draft_all_cast_add",
+                    on_click=apply_all_casts,
+                )
+                all_cast_replace_col.button(
+                    "キャスト全員に置き換え",
+                    key="live_setlist_draft_all_cast_replace",
+                    on_click=apply_all_casts,
+                    kwargs={"replace": True},
+                )
+                st.markdown("---")
+                bulk_group_name = st.selectbox(
+                    "枠組みを選択",
+                    ["選択してください"] + list(bulk_participant_groups),
+                    key="live_setlist_draft_bulk_group",
+                )
+                if bulk_group_name != "選択してください":
+                    bulk_members = bulk_participant_groups[bulk_group_name]
+                    st.caption(f"{bulk_group_name}：{'、'.join(bulk_members)}")
+
+                    def apply_bulk_participants(replace=False, members=bulk_members):
+                        current_members = st.session_state.get("live_setlist_draft_participants", [])
+                        st.session_state["live_setlist_draft_participants"] = (
+                            list(members)
+                            if replace
+                            else unique_in_registered_order(list(current_members) + list(members))
+                        )
+
+                    add_col, replace_col = st.columns(2)
+                    add_col.button(
+                        "参加者に追加",
+                        key="live_setlist_draft_bulk_add",
+                        on_click=apply_bulk_participants,
+                    )
+                    replace_col.button(
+                        "この枠組みに置き換え",
+                        key="live_setlist_draft_bulk_replace",
+                        on_click=apply_bulk_participants,
+                        kwargs={"replace": True},
+                    )
+
+        costume_name_column = next(
+            (column for column in costume_master_df.columns if "衣装" in column),
+            None,
+        ) if not costume_master_df.empty else None
+        costume_options = unique_in_registered_order(
+            costume_master_df[costume_name_column].dropna().astype(str).tolist()
+        ) if costume_name_column else []
+        default_costume_map = st.session_state.setdefault("live_setlist_draft_default_costumes", {})
+        if selected_draft_units or selected_draft_participants:
+            with st.expander("👗 この公演の基本衣装を設定（任意）", expanded=False):
+                st.caption("ここで選んだ衣装は、そのユニット・参加者が歌う曲の初期値になります。曲ごとに変更できます。")
+                for entity_kind, entities in [
+                    ("unit", selected_draft_units),
+                    ("person", selected_draft_participants),
+                ]:
+                    for entity in entities:
+                        entity_key = f"{entity_kind}:{entity}"
+                        current_costume = default_costume_map.get(entity_key, "（未設定）")
+                        costume_index = (
+                            ["（未設定）"] + costume_options
+                        ).index(current_costume) if current_costume in ["（未設定）"] + costume_options else 0
+                        selected_default_costume = st.selectbox(
+                            f"{'ユニット' if entity_kind == 'unit' else '参加者'}：{entity}",
+                            ["（未設定）"] + costume_options,
+                            index=costume_index,
+                            key=f"live_setlist_default_costume_{entity_kind}_{make_search_key(entity)}",
+                        )
+                        default_costume_map[entity_key] = selected_default_costume
+
+        draft_song_source = full_analysis_df.copy()
+        if "楽曲区分" in draft_song_source.columns:
+            draft_song_source = draft_song_source[
+                ~draft_song_source["楽曲区分"].fillna("").astype(str).str.contains("外部", na=False)
+            ]
+        draft_song_candidates = unique_in_registered_order(
+            draft_song_source["集計用楽曲名"].dropna().astype(str).tolist()
+        )
+        song_options = ["（未登録曲を入力）"] + draft_song_candidates
+        selected_draft_song = st.selectbox(
+            "楽曲名（候補を検索できます）",
+            song_options,
+            key="live_setlist_draft_song",
+        )
+        if selected_draft_song == "（未登録曲を入力）":
+            draft_song = st.text_input(
+                "未登録の楽曲名",
+                placeholder="曲名を入力",
+                key="live_setlist_draft_custom_song",
+            ).strip()
+        else:
+            draft_song = selected_draft_song
+
+        draft_is_short = st.checkbox(
+            "Short版として記録する",
+            key="live_setlist_draft_is_short",
+        )
+
+        # 選択曲の既存履歴・収録情報。楽曲候補を決める際の確認用で、下書きにはその時点の情報も残す。
+        draft_album_info = "未登録"
+        draft_series_info = ""
+        draft_previous_label = "初披露候補"
+        draft_appearance_count = 0
+        draft_history = pd.DataFrame()
+        if draft_song:
+            draft_song_key = make_search_key(draft_song)
+            draft_history = full_analysis_df[
+                full_analysis_df["集計用楽曲名"].map(make_search_key) == draft_song_key
+            ].copy()
+            if "日付_dt" in draft_history.columns:
+                draft_history = draft_history.sort_values("日付_dt", ascending=False, kind="stable")
+            draft_appearance_count = len(draft_history)
+            if not draft_history.empty:
+                previous_row = draft_history.iloc[0]
+                previous_date = previous_row.get("日付_dt")
+                previous_date_label = previous_date.strftime("%Y/%m/%d") if pd.notna(previous_date) else "日付不明"
+                previous_live = str(previous_row.get(live_col_name, "")) if live_col_name else ""
+                draft_previous_label = (
+                    f"{previous_date_label}｜{previous_live}"
+                    if previous_live and previous_live != "nan"
+                    else previous_date_label
+                )
+
+            if not song_album_df.empty and "楽曲名" in song_album_df.columns:
+                album_name_column = next(
+                    (column for column in song_album_df.columns if "アルバム" in column or "CD" in column),
+                    None,
+                )
+                album_rows = song_album_df[
+                    song_album_df.get("_song_search_key", song_album_df["楽曲名"].map(make_search_key)).eq(draft_song_key)
+                ]
+                if album_name_column and not album_rows.empty:
+                    album_names = unique_in_registered_order(album_rows[album_name_column].dropna().astype(str).tolist())
+                    draft_album_info = "／".join(album_names)
+                    master_album_column = next(
+                        (column for column in album_master_df.columns if "アルバム" in column or "CD" in column),
+                        None,
+                    ) if not album_master_df.empty else None
+                    master_series_column = next(
+                        (column for column in album_master_df.columns if "シリーズ" in column),
+                        None,
+                    ) if not album_master_df.empty else None
+                    if master_album_column and master_series_column:
+                        series_values = []
+                        for album_name in album_names:
+                            matches = album_master_df[
+                                album_master_df[master_album_column].map(make_search_key).eq(make_search_key(album_name))
+                            ]
+                            series_values.extend(matches[master_series_column].dropna().astype(str).tolist())
+                        draft_series_info = "／".join(unique_in_registered_order(series_values))
+
+            st.markdown("#### 🔎 選択中の曲の情報")
+            info_count, info_album = st.columns([0.7, 1.8])
+            info_count.metric("既存の披露回数", f"{draft_appearance_count}回")
+            info_album.markdown(f"**収録アルバム**  \\\n+{draft_album_info}")
+            st.markdown(f"**前回披露**　{draft_previous_label}")
+            if draft_series_info:
+                st.caption(f"アルバムシリーズ：{draft_series_info}")
+            if not draft_history.empty:
+                with st.expander("直近の披露履歴を見る", expanded=False):
+                    history_columns = [column for column in ["日付", live_col_name, "歌唱者", "衣装"] if column and column in draft_history.columns]
+                    st.dataframe(draft_history[history_columns].head(5), hide_index=True, use_container_width=True)
+
+        original_singer_text = ""
+        original_song_units = []
+        original_song_singers = []
+        if draft_song and not song_album_df.empty and "楽曲名" in song_album_df.columns and "歌唱者" in song_album_df.columns:
+            original_rows = song_album_df[
+                song_album_df.get("_song_search_key", song_album_df["楽曲名"].map(make_search_key)).eq(
+                    make_search_key(draft_song)
+                )
+            ]
+            original_singer_values = unique_in_registered_order(
+                original_rows["歌唱者"].dropna().astype(str).tolist()
+            )
+            original_singer_text = "／".join(original_singer_values)
+            for singer_value in original_singer_values:
+                for token in [item.strip() for item in re.split(r"[、,，;；／/]", singer_value) if item.strip()]:
+                    if token in draft_unit_options and token not in original_song_units:
+                        original_song_units.append(token)
+                    elif token in draft_participant_options and token not in original_song_singers:
+                        original_song_singers.append(token)
+
+        # 曲を切り替えた時だけ、オリジナルの歌唱情報を初期値として入れる。
+        current_draft_song_marker = make_search_key(draft_song) if draft_song else ""
+        if st.session_state.get("live_setlist_draft_song_marker") != current_draft_song_marker:
+            st.session_state["live_setlist_draft_song_units"] = original_song_units
+            st.session_state["live_setlist_draft_song_singers"] = original_song_singers
+            st.session_state["live_setlist_draft_song_marker"] = current_draft_song_marker
+
+        st.caption("歌唱ユニットと歌唱者は別に記録します。曲を選んだ直後は、登録済みのオリジナル歌唱情報が入ります。")
+        song_unit_col, song_singer_col, song_costume_col = st.columns(3)
+        with song_unit_col:
+            selected_song_units = st.multiselect(
+                "歌唱ユニット（任意）",
+                draft_unit_options,
+                key="live_setlist_draft_song_units",
+            )
+        with song_singer_col:
+            selected_song_singers = st.multiselect(
+                "歌唱者（任意）",
+                draft_participant_options,
+                key="live_setlist_draft_song_singers",
+            )
+        with song_costume_col:
+            inherited_costumes = unique_in_registered_order(
+                [
+                    default_costume_map.get(f"unit:{unit}", "")
+                    for unit in selected_song_units
+                ] + [
+                    default_costume_map.get(f"person:{person}", "")
+                    for person in selected_song_singers
+                ]
+            )
+            inherited_costumes = [costume for costume in inherited_costumes if costume and costume != "（未設定）"]
+            costume_choices = ["（未設定）"] + inherited_costumes + [
+                costume for costume in costume_options if costume not in inherited_costumes
+            ] + ["（手入力）"]
+            selected_costume = st.selectbox(
+                "衣装（基本衣装から変更可）",
+                costume_choices,
+                key=f"live_setlist_draft_song_costume_{current_draft_song_marker or 'custom'}",
+            )
+            if selected_costume == "（手入力）":
+                draft_costume_text = st.text_input(
+                    "衣装名を入力",
+                    placeholder="例：○○",
+                    key=f"live_setlist_draft_custom_costume_{current_draft_song_marker or 'custom'}",
+                ).strip()
+            elif selected_costume == "（未設定）":
+                draft_costume_text = ""
+            else:
+                draft_costume_text = selected_costume
+
+        draft_note_col = st.columns(1)[0]
+        with draft_note_col:
+            draft_note_text = st.text_input(
+                "メモ（任意）",
+                placeholder="例：衣装、演出など",
+                key="live_setlist_draft_note",
+            )
+
+        display_draft_song = f"{draft_song} (Short)" if draft_song and draft_is_short else draft_song
+        if st.button("➕ この曲をメモに追加", key="live_setlist_draft_add", type="primary"):
+            if not draft_song:
+                st.warning("楽曲名を選ぶか入力してください。")
+            else:
+                st.session_state[draft_rows_key].append(
+                    {
+                        "曲順": len(st.session_state[draft_rows_key]) + 1,
+                        "楽曲名": display_draft_song,
+                        "参加ユニット": "、".join(selected_draft_units),
+                        "参加者": "、".join(selected_draft_participants),
+                        "アルバムシリーズ": draft_series_info,
+                        "収録アルバム": draft_album_info,
+                        "既存の披露回数": draft_appearance_count,
+                        "前回披露": draft_previous_label,
+                        "歌唱ユニット": "、".join(selected_song_units),
+                        "歌唱者": "、".join(selected_song_singers),
+                        "衣装": draft_costume_text,
+                        "メモ": draft_note_text,
+                    }
+                )
+                st.rerun()
+
+        draft_rows = st.session_state[draft_rows_key]
+        if draft_rows:
+            draft_df = pd.DataFrame(draft_rows)
+            if draft_title:
+                st.markdown(f"### 記録中：{draft_title}")
+            st.dataframe(draft_df, hide_index=True, use_container_width=True)
+            actions = st.columns(3)
+            with actions[0]:
+                if st.button("↩️ 最後の1曲を削除", key="live_setlist_draft_remove_last"):
+                    st.session_state[draft_rows_key].pop()
+                    st.rerun()
+            with actions[1]:
+                st.download_button(
+                    "⬇️ TSVで保存",
+                    data=draft_df.to_csv(index=False, sep="\t").encode("utf-8-sig"),
+                    file_name="live_setlist_memo.tsv",
+                    mime="text/tab-separated-values",
+                    key="live_setlist_draft_download",
+                )
+            with actions[2]:
+                if st.button("🗑️ メモをすべて消去", key="live_setlist_draft_clear"):
+                    st.session_state[draft_rows_key] = []
+                    st.rerun()
+        else:
+            st.info("まだ曲は追加されていません。")
+
     # TAB 8: 公演セットリスト分析
-    with tab8:
+    if selected_tab == tab_labels[8]:
         render_page_header(
             "🏟️",
             "公演セットリスト・前回披露分析",
             "公演ごとの構成、各曲の前回披露からの間隔、公式ダイジェストを一画面で確認できます。",
         )
+
+        # 正式データとは切り離した、配信視聴中専用の下書きメモ。
+        # ローカル版だけに出し、CSVへは自動保存しない。
+        if False and not PUBLIC_MODE:
+            with st.expander("📝 ライブ中セットリストメモ（ローカルのみ）", expanded=False):
+                st.caption(
+                    "配信を見ながら順番に控えるためのメモです。ここで追加した内容は、正式なセットリストCSVには反映されません。"
+                )
+                st.caption("必要になったら、下のボタンからTSV形式で保存してスプレッドシートへ貼り付けられます。")
+
+                draft_rows_key = "live_setlist_draft_rows"
+                if draft_rows_key not in st.session_state:
+                    st.session_state[draft_rows_key] = []
+
+                draft_title = st.text_input(
+                    "配信・公演名（任意）",
+                    placeholder="例：○○ LIVE DAY1",
+                    key="live_setlist_draft_title",
+                )
+                draft_time, draft_song_col = st.columns([1, 2])
+                with draft_time:
+                    draft_timestamp = st.text_input(
+                        "時刻（任意）",
+                        placeholder="例：20:15",
+                        key="live_setlist_draft_timestamp",
+                    )
+                with draft_song_col:
+                    song_options = ["（未登録曲を入力）"] + unique_in_registered_order(
+                        df["集計用楽曲名"].dropna().astype(str).tolist()
+                    )
+                    selected_draft_song = st.selectbox(
+                        "楽曲名（候補を検索できます）",
+                        song_options,
+                        key="live_setlist_draft_song",
+                    )
+
+                if selected_draft_song == "（未登録曲を入力）":
+                    draft_song = st.text_input(
+                        "未登録の楽曲名",
+                        placeholder="曲名を入力",
+                        key="live_setlist_draft_custom_song",
+                    ).strip()
+                else:
+                    draft_song = selected_draft_song
+
+                # 配信を見ながら曲を確定しやすいよう、既存データから補助情報を表示する。
+                draft_album_info = "未登録"
+                draft_series_info = ""
+                draft_previous_label = "初披露候補"
+                draft_appearance_count = 0
+                if draft_song:
+                    draft_song_key = make_search_key(draft_song)
+                    draft_history = full_analysis_df[
+                        full_analysis_df["集計用楽曲名"].map(make_search_key) == draft_song_key
+                    ].copy()
+                    if "日付_dt" in draft_history.columns:
+                        draft_history = draft_history.sort_values(
+                            "日付_dt", ascending=False, kind="stable"
+                        )
+                    draft_appearance_count = len(draft_history)
+
+                    if not draft_history.empty:
+                        previous_row = draft_history.iloc[0]
+                        previous_date = previous_row.get("日付_dt")
+                        previous_date_label = (
+                            previous_date.strftime("%Y/%m/%d")
+                            if pd.notna(previous_date)
+                            else "日付不明"
+                        )
+                        previous_live = str(previous_row.get(live_col_name, ""))
+                        draft_previous_label = (
+                            f"{previous_date_label}｜{previous_live}"
+                            if previous_live and previous_live != "nan"
+                            else previous_date_label
+                        )
+
+                    if not song_album_df.empty and "楽曲名" in song_album_df.columns:
+                        album_name_column = next(
+                            (column for column in song_album_df.columns if "アルバム" in column or "CD" in column),
+                            None,
+                        )
+                        album_rows = song_album_df[
+                            song_album_df["_song_search_key"].eq(draft_song_key)
+                        ] if "_song_search_key" in song_album_df.columns else song_album_df[
+                            song_album_df["楽曲名"].map(make_search_key).eq(draft_song_key)
+                        ]
+                        if album_name_column and not album_rows.empty:
+                            album_names = unique_in_registered_order(
+                                album_rows[album_name_column].dropna().astype(str).tolist()
+                            )
+                            draft_album_info = "／".join(album_names)
+
+                            if not album_master_df.empty:
+                                master_album_column = next(
+                                    (column for column in album_master_df.columns if "アルバム" in column or "CD" in column),
+                                    None,
+                                )
+                                master_series_column = next(
+                                    (column for column in album_master_df.columns if "シリーズ" in column),
+                                    None,
+                                )
+                                if master_album_column and master_series_column:
+                                    series_values = []
+                                    for album_name in album_names:
+                                        matching_master = album_master_df[
+                                            album_master_df[master_album_column].map(make_search_key).eq(
+                                                make_search_key(album_name)
+                                            )
+                                        ]
+                                        if not matching_master.empty:
+                                            series_values.extend(
+                                                matching_master[master_series_column].dropna().astype(str).tolist()
+                                            )
+                                    draft_series_info = "／".join(
+                                        unique_in_registered_order(series_values)
+                                    )
+
+                    st.markdown("##### 🔎 曲の補助情報")
+                    info_count, info_album, info_previous = st.columns([0.65, 1.5, 1.5])
+                    info_count.metric("既存の披露回数", f"{draft_appearance_count}回")
+                    info_album.metric("収録アルバム", draft_album_info)
+                    info_previous.metric("前回披露", draft_previous_label)
+                    if draft_series_info:
+                        st.caption(f"アルバムシリーズ：{draft_series_info}")
+
+                    if not draft_history.empty:
+                        with st.expander("直近の披露履歴を見る", expanded=False):
+                            history_columns = [column for column in ["日付", live_col_name, "歌唱者", "衣装"] if column in draft_history.columns]
+                            recent_history = draft_history[history_columns].head(5).copy()
+                            if "日付" in recent_history.columns:
+                                recent_history["日付"] = pd.to_datetime(
+                                    recent_history["日付"], errors="coerce"
+                                ).dt.strftime("%Y/%m/%d").fillna("")
+                            st.dataframe(recent_history, hide_index=True, use_container_width=True)
+
+                draft_singers, draft_note = st.columns(2)
+                with draft_singers:
+                    draft_singer_text = st.text_input(
+                        "歌唱者（任意）",
+                        placeholder="例：関根瞳、近藤玲奈",
+                        key="live_setlist_draft_singers",
+                    )
+                with draft_note:
+                    draft_note_text = st.text_input(
+                        "メモ（任意）",
+                        placeholder="例：ショート版、衣装など",
+                        key="live_setlist_draft_note",
+                    )
+
+                if st.button("➕ この曲をメモに追加", key="live_setlist_draft_add", type="primary"):
+                    if not draft_song:
+                        st.warning("楽曲名を選ぶか入力してください。")
+                    else:
+                        st.session_state[draft_rows_key].append(
+                            {
+                                "曲順": len(st.session_state[draft_rows_key]) + 1,
+                                "時刻": draft_timestamp,
+                                "楽曲名": draft_song,
+                                "アルバムシリーズ": draft_series_info,
+                                "収録アルバム": draft_album_info,
+                                "既存の披露回数": draft_appearance_count,
+                                "前回披露": draft_previous_label,
+                                "歌唱者": draft_singer_text,
+                                "メモ": draft_note_text,
+                            }
+                        )
+                        st.rerun()
+
+                draft_rows = st.session_state[draft_rows_key]
+                if draft_rows:
+                    draft_df = pd.DataFrame(draft_rows)
+                    if draft_title:
+                        st.markdown(f"**記録中：** {draft_title}")
+                    st.dataframe(draft_df, hide_index=True, use_container_width=True)
+
+                    action_left, action_middle, action_right = st.columns(3)
+                    with action_left:
+                        if st.button("↩️ 最後の1曲を削除", key="live_setlist_draft_remove_last"):
+                            st.session_state[draft_rows_key].pop()
+                            st.rerun()
+                    with action_middle:
+                        tsv_text = draft_df.to_csv(index=False, sep="\t")
+                        st.download_button(
+                            "⬇️ TSVで保存",
+                            data=tsv_text.encode("utf-8-sig"),
+                            file_name="live_setlist_memo.tsv",
+                            mime="text/tab-separated-values",
+                            key="live_setlist_draft_download",
+                        )
+                    with action_right:
+                        if st.button("🗑️ メモをすべて消去", key="live_setlist_draft_clear"):
+                            st.session_state[draft_rows_key] = []
+                            st.rerun()
+                else:
+                    st.info("まだ曲は追加されていません。")
 
         if not live_col_name:
             st.warning("⚠️ 公演名の列が見つかりません。")
@@ -4819,6 +7103,92 @@ if os.path.exists(SETLIST_FILE):
                     unsafe_allow_html=True,
                 )
 
+                render_event_context_images(str(selected_event))
+
+                # ローカル版だけ：キャストライブは、DAY単位か全DAYまとめのレポートを作れる。
+                if "キャストライブ" in selected_event_category:
+                    report_base_name = re.sub(r"\s*DAY\s*\d+\s*$", "", str(selected_event), flags=re.IGNORECASE).strip()
+                    related_event_names = [
+                        event_name
+                        for event_name in df[live_col_name].dropna().unique()
+                        if re.sub(r"\s*DAY\s*\d+\s*$", "", str(event_name), flags=re.IGNORECASE).strip() == report_base_name
+                    ]
+                    report_scope_options = ["選択中のDAYのみ"]
+                    if len(related_event_names) >= 2:
+                        report_scope_options.append("DAY1・DAY2をまとめる")
+                    report_scope = st.radio(
+                        "レポートに含める日程",
+                        report_scope_options,
+                        horizontal=True,
+                        key=f"event_report_scope_{make_search_key(selected_event)}",
+                    )
+                    report_event_df = (
+                        df[df[live_col_name].isin(related_event_names)].copy()
+                        if report_scope == "DAY1・DAY2をまとめる"
+                        else event_setlist_df.copy()
+                    )
+                    if "日付_dt" in report_event_df.columns:
+                        report_event_df = report_event_df.sort_values(
+                            ["日付_dt", live_col_name], kind="stable", na_position="last"
+                        )
+                    if "曲順" in report_event_df.columns:
+                        report_event_df["_report_order"] = pd.to_numeric(report_event_df["曲順"], errors="coerce")
+                        report_event_df = report_event_df.sort_values(
+                            ["日付_dt", "_report_order"], kind="stable", na_position="last"
+                        )
+
+                    event_song_col = "集計用楽曲名" if "集計用楽曲名" in report_event_df.columns else "楽曲名"
+                    event_singer_col = next(
+                        (column for column in report_event_df.columns if "歌唱者" in column),
+                        None,
+                    )
+                    event_unit_col = next(
+                        (column for column in report_event_df.columns if "ユニット" in column),
+                        None,
+                    )
+                    event_singer_names = []
+                    if event_singer_col:
+                        for singer_value in report_event_df[event_singer_col].dropna().astype(str):
+                            event_singer_names.extend(
+                                name.strip()
+                                for name in re.split(r"[;；]", singer_value)
+                                if name.strip() and name.strip() != "その他"
+                            )
+                    event_units = (
+                        report_event_df[event_unit_col].dropna().astype(str).nunique()
+                        if event_unit_col else 0
+                    )
+                    event_report_highlights = []
+                    if report_scope == "DAY1・DAY2をまとめる":
+                        for day_name, day_df in report_event_df.groupby(live_col_name, sort=False):
+                            for setlist_index, (_, setlist_row) in enumerate(day_df.head(3).iterrows(), start=1):
+                                event_report_highlights.append(
+                                    (f"{str(day_name)[-4:]} M{setlist_index:02d}　{setlist_row.get(event_song_col, '楽曲名未登録')}", "")
+                                )
+                    else:
+                        for setlist_index, (_, setlist_row) in enumerate(report_event_df.head(6).iterrows(), start=1):
+                            singer_label = str(setlist_row.get(event_singer_col, "")) if event_singer_col else ""
+                            event_report_highlights.append(
+                                (f"M{setlist_index:02d}　{setlist_row.get(event_song_col, '楽曲名未登録')}", singer_label or "歌唱者未登録")
+                            )
+                    report_title = f"{report_base_name} 公演レポート" if report_scope == "DAY1・DAY2をまとめる" else f"{selected_event} 公演レポート"
+                    render_analysis_report_download(
+                        report_title,
+                        f"{selected_event_date_label}／{report_scope}",
+                        [
+                            ("セットリスト", f"{len(report_event_df)}曲"),
+                            ("披露楽曲数", f"{report_event_df[event_song_col].nunique() if event_song_col in report_event_df.columns else 0}曲"),
+                            ("歌唱者数", f"{len(unique_in_registered_order(event_singer_names))}人"),
+                            ("参加ユニット", f"{event_units}組"),
+                        ],
+                        event_report_highlights,
+                        key=f"download_event_report_{make_search_key(selected_event)}_{report_scope}",
+                        jacket_path=find_event_logo_path(report_base_name),
+                        setlist_paths=find_event_setlist_image_paths(
+                            related_event_names if report_scope == "DAY1・DAY2をまとめる" else [selected_event]
+                        ),
+                    )
+
                 # 略称（例: 5thDAY2 / 6th大阪DAY1）を現在の公演名と照合する。
                 def is_commentary_for_event(shorthand, event_name):
                     # 空白・引用符・記号の表記ゆれを除いて照合する。
@@ -4882,6 +7252,11 @@ if os.path.exists(SETLIST_FILE):
                     selected_event,
                     youtube_live_digest_df,
                     youtube_xr_intro_df,
+                )
+                ap_stream_options = build_event_media_options(
+                    selected_event,
+                    pd.DataFrame(),
+                    pd.DataFrame(),
                     youtube_live_ap_stream_df,
                 )
                 if event_media_options:
@@ -4904,6 +7279,27 @@ if os.path.exists(SETLIST_FILE):
                         )
                         st.caption(f"{selected_event_media['種別']}｜公式YouTubeの埋め込みです。")
                         st.link_button("YouTubeで開く", selected_event_media["URL"])
+
+                if ap_stream_options:
+                    st.subheader("📡 AP生配信")
+                    if st.checkbox(
+                        "AP生配信を表示する",
+                        key=f"tab8_show_ap_stream_{make_search_key(selected_event)}",
+                    ):
+                        selected_ap_stream_index = st.selectbox(
+                            "視聴するAP生配信を選択:",
+                            range(len(ap_stream_options)),
+                            format_func=lambda index: ap_stream_options[index]["表示"],
+                            key=f"tab8_ap_stream_{make_search_key(selected_event)}",
+                        )
+                        selected_ap_stream = ap_stream_options[selected_ap_stream_index]
+                        render_compact_youtube(
+                            selected_ap_stream["URL"],
+                            selected_ap_stream["表示"],
+                            compact=False,
+                        )
+                        st.caption("AP生配信｜公式YouTubeの埋め込みです。")
+                        st.link_button("YouTubeで開く", selected_ap_stream["URL"])
 
                 series_col = (
                     next((c for c in album_master_df.columns if "シリーズ" in c), None)
@@ -5038,7 +7434,7 @@ if os.path.exists(SETLIST_FILE):
                 )
 
     # TAB 9: 出演・参加履歴
-    with tab9:
+    if selected_tab == tab_labels[9]:
         render_page_header(
             "👥",
             "出演・参加履歴",
@@ -5064,23 +7460,51 @@ if os.path.exists(SETLIST_FILE):
             attendance_clean_df = attendance_clean_df[
                 attendance_clean_df["参加状況"].astype(str) != "対象外"
             ].copy()
+            include_release_events = st.toggle(
+                "発売記念イベントを含める",
+                value=True,
+                help="オフにすると、公演名に「発売記念」を含むイベントを参加履歴・公演別・カレンダーから除外します。",
+                key="attendance_include_release_events",
+            )
+            if not include_release_events:
+                attendance_clean_df = attendance_clean_df[
+                    ~attendance_clean_df["公演名"].astype(str).str.contains("発売記念", na=False)
+                ].copy()
             attendance_clean_df["所属ユニット"] = attendance_clean_df["キャスト"].map(
                 lambda cast_name: idol_to_unit_map.get(str(cast_name), "その他")
             )
 
             def unit_cell_style(unit_name):
                 """公式ユニットカラーを表に使いつつ、文字の可読性を保つ。"""
-                color = MEMBER_COLOR_MAP.get(str(unit_name), "")
+                color = display_group_color(unit_name)
+                background = display_group_background(unit_name)
                 if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
                     return ""
                 red, green, blue = (int(color[index:index + 2], 16) for index in (1, 3, 5))
                 brightness = (red * 299 + green * 587 + blue * 114) / 1000
-                text_color = "#20243d" if brightness > 165 else "#ffffff"
-                return f"background-color: {color}; color: {text_color}; font-weight: 700;"
+                is_gradient = str(background).startswith("linear-gradient")
+                text_color = "#ffffff" if is_gradient else ("#20243d" if brightness > 165 else "#ffffff")
+                style = f"background-color: {color}; color: {text_color}; font-weight: 700;"
+                if background != color:
+                    style += f" background-image: {background};"
+                if is_gradient:
+                    style += " text-shadow: 0 1px 2px rgba(0,0,0,.78);"
+                return style
 
             for empty_col in ["追加参加決定日", "補足"]:
                 if empty_col in attendance_clean_df.columns:
                     attendance_clean_df[empty_col] = attendance_clean_df[empty_col].replace({"None": "", "nan": ""})
+            # 登録作業のためだけに付けた定型メモは、閲覧画面には出さない。
+            # 個別の事情を書いた補足はそのまま残す。
+            if "補足" in attendance_clean_df.columns:
+                hidden_attendance_notes = {
+                    "PDF参加履歴より登録",
+                    "トーク&ミニライブ・披露曲未発表",
+                    "画像の色＋元CSV",
+                }
+                attendance_clean_df["補足"] = attendance_clean_df["補足"].where(
+                    ~attendance_clean_df["補足"].astype(str).isin(hidden_attendance_notes), ""
+                )
 
             def attendance_event_key(value):
                 """公演名の引用符・記号・全半角の違いを無視して照合する。"""
@@ -5112,6 +7536,58 @@ if os.path.exists(SETLIST_FILE):
             attendance_clean_df["_event_date"] = pd.to_datetime(
                 attendance_clean_df["_event_date"], errors="coerce"
             )
+            # 斑鳩ルカ（川口莉奈）は 5.5th Anniversary LIVE からコメティックへ加入。
+            # それ以前の参加履歴は、現在の所属ではなく「ソロ」と表示する。
+            def event_specific_unit_column(event_name):
+                """通常ユニットではない、公演固有のチーム編成を選ぶ。"""
+                name = clean_live_name(str(event_name)).lower()
+                pj_release_markers = (
+                    "カウントダウンラブ", "kawaii♡めたもる交響曲",
+                    "karma / naraku", "super duper dreamer", "散花-sanka-",
+                    "ボーダーレス・ノンストレス", "ring ring ringの魔法", "tokyo自由系*ガール",
+                )
+                if "master showpiece" in name:
+                    return "-Master ShowPiece-"
+                if "refrac7ions" in name or "still blue" in name:
+                    return "PJ: REFRAC7IONS"
+                # Song for Prism のPJ企画盤発売記念イベントは、通常ユニットではなく
+                # PJ: REFRAC7IONS 内の企画ユニットとして参加したものを表示する。
+                if "song for prism" in name and "発売記念" in name and any(marker in name for marker in pj_release_markers):
+                    return "PJ: REFRAC7IONS"
+                # COLORFUL FE@THERS の発売記念イベントは、通常ユニットではなく
+                # Stella / Luna / Sol の企画チームとして参加したものを表示する。
+                if "colorful fe@thers" in name and "発売記念" in name:
+                    return "Team."
+                if "シャニマス大感謝祭" in name or "283スポーツフェスティバル" in name:
+                    return "Team."
+                return ""
+
+            def attendance_unit_at_event(row):
+                cast_name = str(row.get("キャスト", ""))
+                event_date = row.get("_event_date")
+                event_name = clean_live_name(str(row.get("公演名", ""))).lower()
+                special_column = event_specific_unit_column(row.get("公演名", ""))
+                if special_column:
+                    special_unit = group_member_map_by_column.get(special_column, {}).get(cast_name)
+                    if special_unit:
+                        return special_unit
+                if cast_name in {"川口莉奈", "斑鳩ルカ"}:
+                    # 5.5th は斑鳩ルカのコメティック加入後。公演名でも明示して、
+                    # 略称の参加履歴で日付照合に失敗してもソロ扱いにならないようにする。
+                    if "5.5th anniversary" in event_name and "星が見上げた空" in event_name:
+                        return "コメティック"
+                    if pd.notna(event_date) and event_date < pd.Timestamp("2023-10-21"):
+                        return "ソロ"
+                return idol_to_unit_map.get(cast_name, "その他")
+
+            attendance_clean_df["所属ユニット"] = attendance_clean_df.apply(
+                attendance_unit_at_event, axis=1
+            )
+            # ユニットとして出演しない予定の記録では、所属欄を表示しない。
+            attendance_clean_df.loc[
+                attendance_clean_df["参加状況"].astype(str).str.contains("ユニット出演予定なし", na=False),
+                "所属ユニット",
+            ] = ""
             attendance_clean_df = attendance_clean_df.sort_values(
                 ["_event_date", "公演名", "日程"], na_position="last"
             )
@@ -5134,14 +7610,20 @@ if os.path.exists(SETLIST_FILE):
                 count_cols = st.columns(3)
                 count_cols[0].metric("参加", int((cast_attendance["参加状況"] == "参加").sum()))
                 count_cols[1].metric("一部参加", int((cast_attendance["参加状況"] == "一部楽曲参加").sum()))
-                count_cols[2].metric("欠席", int((cast_attendance["参加状況"] == "欠席").sum()))
+                count_cols[2].metric(
+                    "欠席（急遽不参加を含む）",
+                    int(cast_attendance["参加状況"].isin(["欠席", "急遽不参加"]).sum()),
+                )
 
                 cast_history_columns = [
                     col for col in ["公演名", "日程", "所属ユニット", "参加状況", "追加参加決定日", "補足"]
                     if col in cast_attendance.columns
                 ]
                 cast_history = cast_attendance[cast_history_columns].copy()
+                # データ照合用の正式名称は維持し、画面では共通の作品名を省略する。
+                cast_history["公演名"] = cast_history["公演名"].map(clean_live_name)
                 st.subheader(f"📅 {selected_attendance_cast}さんの参加履歴")
+                render_unit_color_badges(cast_history["所属ユニット"].tolist())
                 st.dataframe(
                     cast_history.style.map(
                         lambda value: f"background-color: {attendance_status_colors.get(value, '#ffffff')};"
@@ -5161,6 +7643,7 @@ if os.path.exists(SETLIST_FILE):
                 selected_attendance_event = st.selectbox(
                     "公演を選択:",
                     attendance_events,
+                    format_func=clean_live_name,
                     key="tab9_attendance_event",
                 )
                 event_attendance = attendance_clean_df[
@@ -5181,6 +7664,7 @@ if os.path.exists(SETLIST_FILE):
                 if visible_statuses:
                     event_attendance = event_attendance[event_attendance["参加状況"].isin(visible_statuses)]
                 st.subheader("🏟️ 公演ごとの出演状況")
+                render_unit_color_badges(event_attendance["所属ユニット"].tolist())
                 day_order = unique_in_registered_order(event_attendance["日程"].astype(str).tolist())
                 if day_order:
                     parallel_attendance = event_attendance.pivot_table(
@@ -5280,14 +7764,16 @@ if os.path.exists(SETLIST_FILE):
                                     )
 
     # TAB 10: 歌詞キーワード検索
-    with tab10:
+    if selected_tab == tab_labels[10]:
         render_page_header(
-            "📝",
-            "歌詞キーワード検索",
-            "言葉・関連する英語表現から歌詞を探し、該当箇所を色付きで確認できます。",
+            "📚" if PUBLIC_MODE else "📝",
+            "楽曲情報" if PUBLIC_MODE else "歌詞キーワード検索",
+            "公開版では歌詞本文を掲載せず、楽曲データと公式リンクを案内します。" if PUBLIC_MODE else "言葉・関連する英語表現から歌詞を探し、該当箇所を色付きで確認できます。",
         )
 
-        if lyrics_df.empty:
+        if PUBLIC_MODE:
+            st.info("公開版では歌詞本文・歌詞検索は掲載していません。公式の楽曲情報をご利用ください。")
+        elif lyrics_df.empty:
             st.info(
                 "歌詞データが見つかりません。歌詞CSVをアプリと同じフォルダへ "
                 "`lyrics.csv` として配置してください。"
@@ -5382,6 +7868,85 @@ if os.path.exists(SETLIST_FILE):
             else:
                 st.info("キーワードを入力すると、該当する楽曲と歌詞の抜粋を表示します。")
 
+            st.divider()
+            st.subheader("🧩 セットリスト内の言葉を照合")
+            st.caption(
+                "新しいライブのセットリストを1行ずつ貼り付け、最大2つの言葉を指定すると、"
+                "その言葉を含む曲に ● を付けて確認できます。"
+            )
+            setlist_input = st.text_area(
+                "セットリスト（1行に1曲）",
+                placeholder="例：\nSpread the Wings!!\nAmbitious Eve\nResonance+",
+                height=180,
+                key="setlist_lyric_check_input",
+            )
+            setlist_word_col1, setlist_word_col2 = st.columns(2)
+            with setlist_word_col1:
+                setlist_word_1 = st.text_input(
+                    "言葉 1",
+                    placeholder="例：夢",
+                    key="setlist_lyric_check_word_1",
+                ).strip()
+            with setlist_word_col2:
+                setlist_word_2 = st.text_input(
+                    "言葉 2（任意）",
+                    placeholder="例：光",
+                    key="setlist_lyric_check_word_2",
+                ).strip()
+
+            entered_song_names = [
+                clean_text(line.lstrip("・•●◯○0123456789. ").strip())
+                for line in setlist_input.splitlines()
+                if clean_text(line.lstrip("・•●◯○0123456789. ").strip())
+            ]
+            entered_song_names = list(dict.fromkeys(entered_song_names))
+            check_words = [word for word in [setlist_word_1, setlist_word_2] if word]
+            if entered_song_names and check_words:
+                lyrics_by_key = lyrics_df.set_index("search_key", drop=False)
+                setlist_check_rows = []
+                not_found_songs = []
+                for song_name in entered_song_names:
+                    song_key = make_search_key(song_name)
+                    if song_key not in lyrics_by_key.index:
+                        not_found_songs.append(song_name)
+                        continue
+                    song_row = lyrics_by_key.loc[song_key]
+                    if isinstance(song_row, pd.DataFrame):
+                        song_row = song_row.iloc[0]
+                    row = {"楽曲名": song_row["楽曲名"]}
+                    for word_index, word in enumerate(check_words, start=1):
+                        row[f"言葉{word_index}（{word}）"] = (
+                            "●" if lyric_contains(song_row["歌詞"], [word], "部分一致") else ""
+                        )
+                    setlist_check_rows.append(row)
+
+                if setlist_check_rows:
+                    check_df = pd.DataFrame(setlist_check_rows)
+                    match_columns = [column for column in check_df.columns if column != "楽曲名"]
+                    any_match_mask = check_df[match_columns].eq("●").any(axis=1)
+                    st.markdown("##### 照合結果")
+                    st.dataframe(
+                        check_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "楽曲名": st.column_config.TextColumn("楽曲名", width="large"),
+                            **{
+                                column: st.column_config.TextColumn(column, width="small")
+                                for column in match_columns
+                            },
+                        },
+                    )
+                    st.caption(
+                        f"● が付いた曲: {int(any_match_mask.sum())} / {len(check_df)} 曲"
+                    )
+                if not_found_songs:
+                    st.warning(
+                        "歌詞データと照合できなかった曲: " + "、".join(not_found_songs)
+                    )
+            elif entered_song_names or check_words:
+                st.info("セットリストと、少なくとも1つの言葉を入力すると照合できます。")
+
             with st.expander("🔤 よく使われる単語ランキング", expanded=False):
                 st.caption(
                     "助詞・語尾を除外し、漢字語・カタカナ語・英単語を中心に集計しています。"
@@ -5406,7 +7971,7 @@ if os.path.exists(SETLIST_FILE):
                     )
 
     # TAB 11: 公式番組・生配信履歴
-    with tab11:
+    if selected_tab == tab_labels[11]:
         render_page_header(
             "📺",
             "番組・配信履歴",
@@ -5422,9 +7987,17 @@ if os.path.exists(SETLIST_FILE):
             with radio_col1:
                 st.dataframe(radio_count_df, use_container_width=True, height=280, hide_index=True)
             with radio_col2:
+                radio_cast_options = [
+                    cast_name for cast_name in cast_list
+                    if cast_name in set(radio_count_df["キャスト"])
+                ]
+                radio_cast_options += [
+                    cast_name for cast_name in radio_count_df["キャスト"].tolist()
+                    if cast_name not in radio_cast_options
+                ]
                 selected_radio_cast = st.selectbox(
                     "出演回を確認するキャスト:",
-                    radio_count_df["キャスト"].tolist(),
+                    radio_cast_options,
                     key="selected_radio_cast",
                 )
                 selected_radio_episodes = radio_appearance_df[
@@ -5442,7 +8015,10 @@ if os.path.exists(SETLIST_FILE):
                             how="left",
                         )
                     radio_detail_columns = [
-                        column for column in ["出演回", "初回放送", "放送内容", "切り抜き動画"]
+                        column for column in [
+                            "出演回", "初回放送", "放送内容", "種類", "ユニット回",
+                            "マンスリーMC", "ゲスト", "欠席", "公式配信URL", "切り抜き動画",
+                        ]
                         if column in selected_radio_detail_df.columns
                     ]
                     st.dataframe(
@@ -5454,7 +8030,11 @@ if os.path.exists(SETLIST_FILE):
                             "切り抜き動画": st.column_config.LinkColumn(
                                 "切り抜き動画",
                                 display_text="YouTubeで見る",
-                            )
+                            ),
+                            "公式配信URL": st.column_config.LinkColumn(
+                                "公式配信URL",
+                                display_text="公式ページ",
+                            ),
                         },
                     )
                 else:
@@ -5466,20 +8046,30 @@ if os.path.exists(SETLIST_FILE):
             st.info("`broadcasts.csv` を main.py と同じフォルダへ置くと表示されます。")
         else:
             display_broadcast_df = broadcast_df.copy()
+            if "分類" not in display_broadcast_df.columns:
+                display_broadcast_df["分類"] = "未分類"
+            display_broadcast_df["分類"] = display_broadcast_df["分類"].replace("", "未分類").fillna("未分類")
             if "初回放送_dt" in display_broadcast_df.columns:
                 display_broadcast_df = display_broadcast_df.sort_values("初回放送_dt", ascending=False)
 
+            broadcast_categories = unique_in_registered_order(display_broadcast_df["分類"].tolist())
             known_broadcast_casts = [
                 cast_name for cast_name in cast_list
                 if "出演者" in display_broadcast_df.columns
                 and display_broadcast_df["出演者"].astype(str).str.contains(re.escape(cast_name), na=False).any()
             ]
-            filter_col, metric_col = st.columns([2, 1])
+            filter_col, category_col, metric_col = st.columns([2, 2, 1])
             with filter_col:
                 selected_broadcast_cast = st.selectbox(
                     "キャストで絞り込み:",
                     ["すべて"] + known_broadcast_casts,
                     key="broadcast_cast_filter",
+                )
+            with category_col:
+                selected_broadcast_category = st.selectbox(
+                    "配信の種類:",
+                    ["すべて"] + broadcast_categories,
+                    key="broadcast_category_filter",
                 )
             if selected_broadcast_cast != "すべて":
                 display_broadcast_df = display_broadcast_df[
@@ -5487,12 +8077,16 @@ if os.path.exists(SETLIST_FILE):
                         re.escape(selected_broadcast_cast), na=False
                     )
                 ]
+            if selected_broadcast_category != "すべて":
+                display_broadcast_df = display_broadcast_df[
+                    display_broadcast_df["分類"] == selected_broadcast_category
+                ]
             with metric_col:
                 st.metric("該当番組数", f"{len(display_broadcast_df):,} 件")
 
             if not display_broadcast_df.empty:
                 shown_columns = [
-                    column for column in ["放送内容", "出演者", "初回放送", "告知サイト", "まとめ"]
+                    column for column in ["放送内容", "分類", "出演者", "初回放送", "告知サイト", "まとめ"]
                     if column in display_broadcast_df.columns
                 ]
                 st.dataframe(
@@ -5501,6 +8095,7 @@ if os.path.exists(SETLIST_FILE):
                     height=520,
                     column_config={
                         "放送内容": st.column_config.TextColumn("放送内容", width="large"),
+                        "分類": st.column_config.TextColumn("分類", width="medium"),
                         "出演者": st.column_config.TextColumn("出演者", width="large"),
                     },
                 )
@@ -5520,7 +8115,7 @@ if os.path.exists(SETLIST_FILE):
                     link_col2.link_button("📝 まとめページを開く", selected_broadcast_row["まとめ"])
 
     # TAB 12: 統合カレンダー
-    with tab12:
+    if selected_tab == tab_labels[12]:
         render_page_header(
             "🗓️",
             "シャイニーカレンダー",
@@ -5695,6 +8290,7 @@ if os.path.exists(SETLIST_FILE):
                             visible_calendar_types.append(calendar_type)
             month_df = calendar_df[(calendar_df["日付"].dt.year == selected_calendar_year) & (calendar_df["日付"].dt.month == selected_calendar_month) & (calendar_df["種類"].isin(visible_calendar_types))].copy()
             st.subheader(f"{selected_calendar_year}年 {selected_calendar_month}月")
+            render_calendar_context_images(selected_calendar_year, selected_calendar_month)
             weekdays = ["日", "月", "火", "水", "木", "金", "土"]
             badge_colors = {"🎤 公演": "#e879a8", "📺 公式番組": "#58aee8", "📻 シャニラジ": "#8b7be8", "💿 リリース": "#e8a54f", "🃏 カード実装": "#55b99d", "🎬 シナリオ・イベント": "#7287d8"}
             short_kind_names = {"🎤 公演": "公演", "📺 公式番組": "番組", "📻 シャニラジ": "ラジオ", "💿 リリース": "発売", "🃏 カード実装": "カード", "🎬 シナリオ・イベント": "シナリオ"}
@@ -5743,7 +8339,13 @@ if os.path.exists(SETLIST_FILE):
             st.dataframe(month_df.sort_values("日付")[["日付", "種類", "内容"]], use_container_width=True, hide_index=True)
 
     # TAB 13: 価格推移
-    with tab13:
+    if selected_tab == tab_labels[14]:
+        render_schedule_prediction()
+
+    if selected_tab == tab_labels[15]:
+        render_event_image_gallery()
+
+    if selected_tab == tab_labels[13]:
         render_page_header(
             "💴",
             "価格推移・購入ガイド",
@@ -5760,6 +8362,43 @@ if os.path.exists(SETLIST_FILE):
             display_price_df = display_price_df.dropna(subset=["価格"])
             display_price_df["日付"] = pd.to_datetime(display_price_df["日付"], errors="coerce")
             display_price_df["日付種別"] = "登録日"
+
+            price_category_col = next(
+                (column for column in display_price_df.columns if "カテゴリ" in column), None
+            )
+            price_name_col = next(
+                (column for column in display_price_df.columns if "対象名" in column or "公演名" in column), None
+            )
+            price_type_col = next(
+                (column for column in display_price_df.columns if "価格種別" in column or "版" in column), None
+            )
+            if price_category_col and price_name_col:
+                blu_ray_df = display_price_df[
+                    display_price_df[price_category_col].astype(str).str.contains("Blu-ray", na=False)
+                ].copy()
+                if not blu_ray_df.empty:
+                    release_summary = (
+                        blu_ray_df.groupby(price_name_col, dropna=False)
+                        .agg(
+                            **{
+                                "発売済みの版": (
+                                    price_type_col,
+                                    lambda values: "・".join(
+                                        unique_in_registered_order(
+                                            [str(value) for value in values if str(value).strip()]
+                                        )
+                                    ) if price_type_col else "発売済み",
+                                ),
+                                "価格帯": (
+                                    "価格",
+                                    lambda values: f"{int(min(values)):,}〜{int(max(values)):,}円",
+                                ),
+                            }
+                        )
+                        .reset_index()
+                        .rename(columns={price_name_col: "公演名"})
+                    )
+                    release_summary.insert(1, "Blu-ray状況", "発売済み")
 
             # 日付未入力の価格は、CDなら収録アルバムの発売日、公演関連なら初日を補助日付にする。
             album_date_candidates = []
@@ -5797,6 +8436,199 @@ if os.path.exists(SETLIST_FILE):
                             event_date_candidates.append((
                                 make_price_event_key(price_event_row[price_event_name_col]), parsed_date
                             ))
+
+            if (
+                "event_df" in locals()
+                and not event_df.empty
+                and "release_summary" in locals()
+            ):
+                live_name_col = next((c for c in event_df.columns if "公演" in c or "イベント" in c), None)
+                live_date_col = next((c for c in event_df.columns if "日付" in c), None)
+                live_category_col = next((c for c in event_df.columns if "区分" in c), None)
+                if live_name_col and live_date_col and live_category_col:
+                    live_groups = {}
+                    cast_live_rows = event_df[
+                        event_df[live_category_col].astype(str).str.contains("キャストライブ", na=False)
+                    ]
+                    for raw_live_row in cast_live_rows[[live_name_col, live_date_col]].to_dict("records"):
+                        raw_name = str(raw_live_row[live_name_col]).strip()
+                        display_name = re.sub(
+                            r"\s*(?:DAY|day)\s*[0-9０-９]+.*$|\s*[昼夜]公演$",
+                            "",
+                            raw_name,
+                        ).strip()
+                        group_key = make_price_event_key(display_name)
+                        if not group_key:
+                            continue
+                        parsed_date = pd.to_datetime(raw_live_row[live_date_col], errors="coerce")
+                        group = live_groups.setdefault(
+                            group_key,
+                            {"公演名": display_name, "開催日": [], "照合済み": False},
+                        )
+                        if pd.notna(parsed_date):
+                            group["開催日"].append(parsed_date)
+
+                    # 単独商品の有無とは別に、別商品へ特典映像として収録された公演も照合する。
+                    # 収録範囲が「一部」の場合は、表でも区別して表示する。
+                    bonus_by_group = {}
+                    if not live_video_bonus_df.empty:
+                        for bonus_row in live_video_bonus_df[
+                            ["対象公演", "収録商品", "収録範囲", "収録内容"]
+                        ].fillna("").to_dict("records"):
+                            bonus_key = make_price_event_key(bonus_row["対象公演"])
+                            if not bonus_key:
+                                continue
+                            for group_key in live_groups:
+                                if bonus_key in group_key or group_key in bonus_key:
+                                    detail = str(bonus_row["収録商品"]).strip()
+                                    contents = str(bonus_row["収録内容"]).strip()
+                                    if contents:
+                                        detail = f"{detail}：{contents}"
+                                    bonus_by_group.setdefault(group_key, []).append({
+                                        "範囲": str(bonus_row["収録範囲"]).strip(),
+                                        "詳細": detail,
+                                    })
+
+                    catalog_records = live_blu_ray_catalog_df.fillna("").to_dict("records")
+
+                    def unique_join(values):
+                        return "／".join(dict.fromkeys(
+                            str(value).strip() for value in values if str(value).strip()
+                        )) or "—"
+
+                    def matching_catalog_records(product_key):
+                        return [
+                            row for row in catalog_records
+                            if (catalog_key := make_price_event_key(row["商品名"]))
+                            and (product_key in catalog_key or catalog_key in product_key)
+                        ]
+
+                    status_rows = []
+                    for release_row in release_summary.to_dict("records"):
+                        release_name = str(release_row["公演名"])
+                        release_key = make_price_event_key(release_name)
+                        explicit_event_keys = []
+                        if "283productionsoloperformancelive" in release_key and "55thanniversarylive" in release_key:
+                            explicit_event_keys = [
+                                make_price_event_key("283PRODUCTION SOLO PERFORMANCE LIVE 我儘なまま"),
+                                make_price_event_key("5.5th Anniversary LIVE 星が見上げた空"),
+                            ]
+                        matched_keys = [
+                            key for key in live_groups
+                            if (
+                                release_key in key or key in release_key
+                                or key in explicit_event_keys
+                            )
+                        ]
+                        matched_groups = [live_groups[key] for key in matched_keys]
+                        catalog_matches = matching_catalog_records(release_key)
+                        for group in matched_groups:
+                            group["照合済み"] = True
+                        release_date = min(
+                            (date for group in matched_groups for date in group["開催日"]),
+                            default=pd.NaT,
+                        )
+                        status_rows.append({
+                            "公演名": release_name,
+                            "開催初日": release_date.strftime("%Y/%m/%d") if pd.notna(release_date) else "—",
+                            "Blu-ray状況": "発売済み",
+                            "発売済みの版": release_row["発売済みの版"],
+                            "価格帯": release_row["価格帯"],
+                            "主な特典": unique_join(
+                                row["初回・特装版特典"] for row in catalog_matches
+                            ),
+                            "特典収録": "／".join(
+                                item["詳細"]
+                                for group_key in matched_keys
+                                for item in bonus_by_group.get(group_key, [])
+                            ) or "—",
+                            "_sort_date": release_date,
+                        })
+
+                    for group_key, group in live_groups.items():
+                        if group["照合済み"]:
+                            continue
+                        event_date = min(group["開催日"], default=pd.NaT)
+                        bonus_entries = bonus_by_group.get(group_key, [])
+                        is_partial_bonus = any(
+                            entry["範囲"] == "一部" for entry in bonus_entries
+                        )
+                        status_rows.append({
+                            "公演名": group["公演名"],
+                            "開催初日": event_date.strftime("%Y/%m/%d") if pd.notna(event_date) else "—",
+                            "Blu-ray状況": (
+                                "他商品に一部収録" if is_partial_bonus
+                                else "他商品に収録" if bonus_entries
+                                else "未発売"
+                            ),
+                            "発売済みの版": "—",
+                            "価格帯": "—",
+                            "主な特典": "—",
+                            "特典収録": "／".join(
+                                entry["詳細"] for entry in bonus_entries
+                            ) or "—",
+                            "_sort_date": event_date,
+                        })
+
+                    if status_rows:
+                        blu_ray_status_df = pd.DataFrame(status_rows).sort_values(
+                            "_sort_date", na_position="last"
+                        ).drop(columns="_sort_date")
+                        status_backgrounds = {
+                            "発売済み": "background-color: #dff5e5; color: #183b24;",
+                            "他商品に収録": "background-color: #dcecff; color: #17365d;",
+                            "他商品に一部収録": "background-color: #fff1c9; color: #5b4300;",
+                            "未発売": "background-color: #fde2e2; color: #6b2020;",
+                        }
+                        styled_blu_ray_status_df = blu_ray_status_df.style.apply(
+                            lambda row: [
+                                status_backgrounds.get(str(row["Blu-ray状況"]), "")
+                                for _ in row
+                            ],
+                            axis=1,
+                        )
+                        st.subheader("💿 ライブBlu-ray発売状況")
+                        st.caption("キャストライブごとに、Blu-rayの発売状況と別商品の特典収録を確認できます。")
+                        st.dataframe(
+                            styled_blu_ray_status_df,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "公演名": st.column_config.TextColumn("公演名", width="large"),
+                                "開催初日": st.column_config.TextColumn("開催初日", width="small"),
+                                "Blu-ray状況": st.column_config.TextColumn("Blu-ray状況", width="small"),
+                                "発売済みの版": st.column_config.TextColumn("発売済みの版", width="medium"),
+                                "価格帯": st.column_config.TextColumn("価格帯", width="small"),
+                                "主な特典": st.column_config.TextColumn("主な特典", width="large"),
+                                "特典収録": st.column_config.TextColumn("特典収録", width="large"),
+                            },
+                        )
+
+                    if not live_blu_ray_catalog_df.empty:
+                        with st.expander("📀 商品ごとの収録内容・特典を確認", expanded=False):
+                            catalog_names = live_blu_ray_catalog_df["商品名"].astype(str).tolist()
+                            selected_catalog_name = st.selectbox(
+                                "Blu-ray商品を選択",
+                                catalog_names,
+                                key="tab13_live_blu_ray_catalog",
+                            )
+                            catalog_row = live_blu_ray_catalog_df[
+                                live_blu_ray_catalog_df["商品名"].astype(str) == selected_catalog_name
+                            ].iloc[0]
+                            st.caption(f"発売日：{catalog_row['発売日']}")
+                            catalog_edition = st.radio(
+                                "確認する版",
+                                ["初回・特装版", "通常版"],
+                                horizontal=True,
+                                key="tab13_live_blu_ray_edition",
+                            )
+                            if catalog_edition == "通常版":
+                                st.markdown(f"**通常版の内容：** {catalog_row['通常版の内容']}")
+                            else:
+                                st.markdown(f"**本編収録：** {catalog_row['本編収録']}")
+                                st.markdown(f"**初回・特装版の特典：** {catalog_row['初回・特装版特典']}")
+                            if str(catalog_row["補足"]).strip():
+                                st.caption(str(catalog_row["補足"]))
 
             # 価格表は「01～08」「Song for Prism ①」のように、ディスコグラフィの
             # 個別商品名とは異なるまとめ表記を使う。その差分をここで吸収する。
