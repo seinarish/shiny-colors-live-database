@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import csv
 import os
 import shutil
@@ -11,9 +10,17 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
-PUBLIC_REPOSITORY = ROOT / "_public_publish_temp"
+# 公開用リポジトリは、現在このアプリを置いているGitHub連携済みのフォルダそのもの。
+# 旧来の一時コピー先フォルダは使わない。
+PUBLIC_REPOSITORY = ROOT
 PRIVATE_FILES = {"lyrics.csv", "event_images.csv"}
 PRIVATE_COLUMN_WORDS = ("歌詞", "画像", "ジャケット", "サムネイル", "ファイル", "パス", "関連画像")
+GENERATED_PATH_PREFIXES = (
+    "__pycache__/",
+    "_public_publish_temp/",
+    "public_release/",
+    "public_site/",
+)
 
 
 class PublicPublishError(RuntimeError):
@@ -84,13 +91,18 @@ def _write_sanitized_table(source: Path, destination: Path) -> None:
         writer.writerows({field: row.get(field, "") for field in public_fields} for row in rows)
 
 
+def _is_generated_status_line(line: str) -> bool:
+    path = line[3:].strip().replace("\\", "/")
+    return path.startswith(GENERATED_PATH_PREFIXES) or ".backup_" in path
+
+
 def _ensure_publish_repository(allow_prepared_data: bool = False) -> None:
     if not (PUBLIC_REPOSITORY / ".git").exists():
         raise PublicPublishError("公開用フォルダが見つかりません。先に公開版を一度セットアップしてください。")
 
     status_lines = [
         line for line in _run(["git", "status", "--porcelain"], PUBLIC_REPOSITORY).splitlines()
-        if line.strip()
+        if line.strip() and not _is_generated_status_line(line)
     ]
     non_data_changes = [
         line for line in status_lines
@@ -113,45 +125,39 @@ def _ensure_publish_repository(allow_prepared_data: bool = False) -> None:
 
 
 def prepare_public_data_sync() -> list[str]:
-    """公開リポジトリへCSV/TSVをコピーし、反映前の差分一覧を返す。"""
+    """現在のCSV/TSVの差分を、公開前に確認できる形で返す。"""
     _ensure_publish_repository(allow_prepared_data=True)
-    for source in _data_sources():
-        _write_sanitized_table(source, PUBLIC_REPOSITORY / source.name)
-
     changed = _run(
         ["git", "status", "--porcelain", "--", "*.csv", "*.tsv"],
         PUBLIC_REPOSITORY,
     )
-    return [line[3:].strip() for line in changed.splitlines() if line.strip()]
+    return [
+        line[3:].strip()
+        for line in changed.splitlines()
+        if line.strip() and Path(line[3:].strip()).name not in PRIVATE_FILES
+    ]
 
 
 def discard_prepared_public_data() -> None:
-    """確認用に作った公開データ差分を取り消す。"""
-    _ensure_publish_repository(allow_prepared_data=True)
-    _run(["git", "restore", "--source=HEAD", "--staged", "--worktree", "--", "*.csv", "*.tsv"], PUBLIC_REPOSITORY)
+    """旧コピー方式との互換用。現在はローカルの編集内容を消さない。"""
+    # 現在は同じフォルダの内容をそのまま確認してから公開する方式なので、
+    # 「取り消す」で未保存のローカル編集を消してしまわないよう何もしない。
+    return None
 
 
 def publish_prepared_public_data() -> tuple[str, list[str]]:
     """確認済みのCSV/TSV差分だけをコミットして公開版へ送る。"""
     _ensure_publish_repository(allow_prepared_data=True)
-    _run(["git", "add", "--", "*.csv", "*.tsv"], PUBLIC_REPOSITORY)
+    changed_before_stage = prepare_public_data_sync()
+    if not changed_before_stage:
+        return "公開用データに差分はありません。", []
+
+    _run(["git", "add", "--", *changed_before_stage], PUBLIC_REPOSITORY)
     changed = _run(["git", "diff", "--cached", "--name-only"], PUBLIC_REPOSITORY)
     changed_files = [line for line in changed.splitlines() if line.strip()]
     if not changed_files:
         return "公開用データに差分はありません。", []
 
     _run(["git", "commit", "-m", "Sync local data to public site"], PUBLIC_REPOSITORY)
-    gh_path = _github_cli_path()
-    token = _run([gh_path, "auth", "token"], ROOT)
-    if not token:
-        raise PublicPublishError("GitHubへのログイン情報を取得できませんでした。")
-    basic = base64.b64encode(f"x-access-token:{token}".encode("ascii")).decode("ascii")
-    _run(
-        [
-            "git", "-c", "credential.helper=",
-            "-c", f"http.extraHeader=AUTHORIZATION: basic {basic}",
-            "push", "origin", "HEAD:main",
-        ],
-        PUBLIC_REPOSITORY,
-    )
+    _run(["git", "push", "origin", "HEAD:main"], PUBLIC_REPOSITORY)
     return "公開版へ反映しました。Streamlit側の更新には数分かかることがあります。", changed_files
