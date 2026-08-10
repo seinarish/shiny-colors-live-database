@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parent
 # 公開用リポジトリは、現在このアプリを置いているGitHub連携済みのフォルダそのもの。
 # 旧来の一時コピー先フォルダは使わない。
 PUBLIC_REPOSITORY = ROOT
-PRIVATE_FILES = {"lyrics.csv", "event_images.csv"}
+PRIVATE_FILES = {"lyrics.csv", "event_images.csv", "シャニラジ_統合編集用.tsv"}
 PRIVATE_COLUMN_WORDS = ("歌詞", "画像", "ジャケット", "サムネイル", "ファイル", "パス", "関連画像")
 GENERATED_PATH_PREFIXES = (
     "__pycache__/",
@@ -118,7 +118,10 @@ def _ensure_publish_repository(allow_prepared_data: bool = False) -> None:
         raise PublicPublishError("公開用フォルダが見つかりません。先に公開版を一度セットアップしてください。")
 
     status_lines = [
-        line for line in _run(["git", "status", "--porcelain"], PUBLIC_REPOSITORY).splitlines()
+        line for line in _run(
+            ["git", "-c", "core.quotepath=false", "status", "--porcelain"],
+            PUBLIC_REPOSITORY,
+        ).splitlines()
         if line.strip() and not _is_generated_status_line(line)
     ]
     non_data_changes = [
@@ -145,7 +148,7 @@ def prepare_public_data_sync() -> list[str]:
     """現在のCSV/TSVの差分を、公開前に確認できる形で返す。"""
     _ensure_publish_repository(allow_prepared_data=True)
     changed = _run(
-        ["git", "status", "--porcelain", "--", "*.csv", "*.tsv"],
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain", "--", "*.csv", "*.tsv"],
         PUBLIC_REPOSITORY,
     )
     return [
