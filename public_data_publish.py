@@ -25,11 +25,11 @@ GENERATED_PATH_PREFIXES = (
 # Only these data files are used by the public app. Local working files,
 # backups, lyrics, and local media assets are deliberately not published.
 PUBLIC_DATA_FILES = frozenset({
-    "albums.csv", "broadcasts.csv", "cards.tsv", "cast_attendance.csv",
+    "albums.csv", "broadcasts.csv", "cast_attendance.csv",
     "commentary_blu_ray.csv", "commentary_streaming.csv", "costumes.csv",
     "event_official_sites.csv", "event_social_links.csv", "events.csv", "idols.csv",
     "live_blu_ray_catalog.csv", "live_video_bonus.csv", "price_history.csv",
-    "shiny_radio_appearances.csv", "shiny_radio_master.csv", "songs.csv",
+    "songs.csv",
     "songs_albums.csv", "songs_categories.csv", "upcoming_releases.csv",
     "youtube_album_preview_links.csv", "youtube_anniversary_pv_links.csv",
     "youtube_live_ap_stream_links.csv", "youtube_live_digest_links_manual.csv",
