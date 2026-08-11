@@ -144,7 +144,9 @@ def _ensure_publish_repository(allow_prepared_data: bool = False) -> None:
         line for line in status_lines
         if not line.rstrip().lower().endswith((".csv", ".tsv"))
     ]
-    if non_data_changes or (status_lines and not allow_prepared_data):
+    # 公開同期では、公開対象外のローカル作業（素材・補助スクリプト・依存関係など）を
+    # 理由に止めない。実際に stage / commit するのは PUBLIC_DATA_FILES のみ。
+    if (non_data_changes or status_lines) and not allow_prepared_data:
         raise PublicPublishError(
             "公開用フォルダに未反映の変更があります。公開処理を止めました。Codexで確認してから再試行してください。"
         )
