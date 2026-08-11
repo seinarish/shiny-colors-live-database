@@ -160,15 +160,6 @@ def _ensure_publish_repository(allow_prepared_data: bool = False) -> None:
         _run(["git", "merge", "--ff-only", "origin/main"], PUBLIC_REPOSITORY)
 
 
-def prepare_public_data_sync() -> list[str]:
-    """現在のCSV/TSVの差分を、公開前に確認できる形で返す。"""
-    _ensure_publish_repository(allow_prepared_data=True)
-    changed = _run(
-        ["git", "-c", "core.quotepath=false", "status", "--porcelain", "--", "*.csv", "*.tsv"],
-        PUBLIC_REPOSITORY,
-    )
-
-
 def public_data_file_names() -> list[str]:
     """Return the local data files eligible for publishing."""
     return sorted(PUBLIC_DATA_FILES, key=str.casefold)
@@ -176,6 +167,15 @@ def public_data_file_names() -> list[str]:
 
 def _is_public_data_file(path_text: str) -> bool:
     return Path(path_text).name in PUBLIC_DATA_FILES
+
+
+def prepare_public_data_sync() -> list[str]:
+    """Return pending changes for data files used by the public app only."""
+    _ensure_publish_repository(allow_prepared_data=True)
+    changed = _run(
+        ["git", "-c", "core.quotepath=false", "status", "--porcelain", "--", "*.csv", "*.tsv"],
+        PUBLIC_REPOSITORY,
+    )
     return [
         line[3:].strip()
         for line in changed.splitlines()
