@@ -39,6 +39,7 @@ if not PUBLIC_MODE:
         discard_prepared_public_data,
         prepare_public_data_sync,
         publish_prepared_public_data,
+        public_data_file_names,
     )
 
     # Streamlitの再読み込み中に旧モジュールが残っていても、画面全体を止めない。
@@ -6664,6 +6665,11 @@ if os.path.exists(SETLIST_FILE):
 
             if "public_sync_files" not in st.session_state:
                 st.session_state["public_sync_files"] = []
+
+            st.caption(
+                "公開対象は公開版で使用するデータだけです（"
+                f"{len(public_data_file_names())} ファイル）。バックアップ・歌詞・ローカル素材・作業用表は反映されません。"
+            )
 
             prepare_col, cancel_col = st.columns(2)
             with prepare_col:

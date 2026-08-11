@@ -22,6 +22,23 @@ GENERATED_PATH_PREFIXES = (
     "public_site/",
 )
 
+# Only these data files are used by the public app. Local working files,
+# backups, lyrics, and local media assets are deliberately not published.
+PUBLIC_DATA_FILES = frozenset({
+    "albums.csv", "broadcasts.csv", "cards.tsv", "cast_attendance.csv",
+    "commentary_blu_ray.csv", "commentary_streaming.csv", "costumes.csv",
+    "event_official_sites.csv", "event_social_links.csv", "events.csv", "idols.csv",
+    "live_blu_ray_catalog.csv", "live_video_bonus.csv", "price_history.csv",
+    "shiny_radio_appearances.csv", "shiny_radio_master.csv", "songs.csv",
+    "songs_albums.csv", "songs_categories.csv", "upcoming_releases.csv",
+    "youtube_album_preview_links.csv", "youtube_anniversary_pv_links.csv",
+    "youtube_live_ap_stream_links.csv", "youtube_live_digest_links_manual.csv",
+    "youtube_media_links_draft.csv", "youtube_media_variants_manual.csv",
+    "youtube_migratory_echoes_media.csv", "youtube_radio_clip_links.csv",
+    "youtube_unit_pv_links.csv", "youtube_video_variants_manual.csv",
+    "youtube_xr_free_intro_links_manual.csv",
+})
+
 
 class PublicPublishError(RuntimeError):
     """公開用データの同期を安全に中止するときに使う例外。"""
@@ -77,9 +94,7 @@ def _data_sources() -> list[Path]:
         [
             path for path in ROOT.iterdir()
             if path.is_file()
-            and path.suffix.lower() in {".csv", ".tsv"}
-            and path.name not in PRIVATE_FILES
-            and ".backup_" not in path.name
+            and path.name in PUBLIC_DATA_FILES
         ],
         key=lambda path: path.name.casefold(),
     )
@@ -152,13 +167,21 @@ def prepare_public_data_sync() -> list[str]:
         ["git", "-c", "core.quotepath=false", "status", "--porcelain", "--", "*.csv", "*.tsv"],
         PUBLIC_REPOSITORY,
     )
+
+
+def public_data_file_names() -> list[str]:
+    """Return the local data files eligible for publishing."""
+    return sorted(PUBLIC_DATA_FILES, key=str.casefold)
+
+
+def _is_public_data_file(path_text: str) -> bool:
+    return Path(path_text).name in PUBLIC_DATA_FILES
     return [
         line[3:].strip()
         for line in changed.splitlines()
         if (
             line.strip()
-            and Path(line[3:].strip()).name not in PRIVATE_FILES
-            and ".backup_" not in line[3:].strip()
+            and _is_public_data_file(line[3:].strip())
         )
     ]
 
@@ -177,8 +200,17 @@ def publish_prepared_public_data() -> tuple[str, list[str]]:
     if not changed_before_stage:
         return "公開用データに差分はありません。", []
 
+    already_staged = _run(["git", "diff", "--cached", "--name-only"], PUBLIC_REPOSITORY)
+    if already_staged.strip():
+        raise PublicPublishError(
+            "別の変更がすでに公開待ちになっています。いったんCodexで内容を確認してから公開してください。"
+        )
+
     _run(["git", "add", "--", *changed_before_stage], PUBLIC_REPOSITORY)
-    changed = _run(["git", "diff", "--cached", "--name-only"], PUBLIC_REPOSITORY)
+    changed = _run(
+        ["git", "diff", "--cached", "--name-only", "--", *changed_before_stage],
+        PUBLIC_REPOSITORY,
+    )
     changed_files = [line for line in changed.splitlines() if line.strip()]
     if not changed_files:
         return "公開用データに差分はありません。", []
