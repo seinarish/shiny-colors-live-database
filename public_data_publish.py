@@ -25,17 +25,15 @@ GENERATED_PATH_PREFIXES = (
 # Only these data files are used by the public app. Local working files,
 # backups, lyrics, and local media assets are deliberately not published.
 PUBLIC_DATA_FILES = frozenset({
-    "albums.csv", "broadcasts.csv", "cast_attendance.csv",
+    "albums.csv", "cast_attendance.csv",
     "commentary_blu_ray.csv", "commentary_streaming.csv", "costumes.csv",
-    "event_official_sites.csv", "event_social_links.csv", "events.csv", "idols.csv",
-    "live_blu_ray_catalog.csv", "live_video_bonus.csv", "price_history.csv",
+    "event_official_sites.csv", "events.csv", "idols.csv",
     "songs.csv",
-    "songs_albums.csv", "songs_categories.csv", "upcoming_releases.csv",
-    "youtube_album_preview_links.csv", "youtube_anniversary_pv_links.csv",
+    "songs_albums.csv", "songs_categories.csv",
+    "youtube_album_preview_links.csv",
     "youtube_live_ap_stream_links.csv", "youtube_live_digest_links_manual.csv",
     "youtube_media_links_draft.csv", "youtube_media_variants_manual.csv",
-    "youtube_migratory_echoes_media.csv", "youtube_radio_clip_links.csv",
-    "youtube_unit_pv_links.csv", "youtube_video_variants_manual.csv",
+    "youtube_migratory_echoes_media.csv", "youtube_video_variants_manual.csv",
     "youtube_xr_free_intro_links_manual.csv",
 })
 
