@@ -1564,8 +1564,57 @@ def append_csv_rows(file_path, rows, expected_columns):
     )
 
 
-def append_radio_episode_row(episode_number, title, broadcast_at):
-    """シャニラジの既存TSV形式を保ったまま、1回分を追加する。"""
+def upsert_radio_episode_row(
+    episode_number,
+    title,
+    broadcast_at,
+    monthly_mcs=None,
+    guests=None,
+    unit_name="",
+    official_url="",
+    note="",
+    absentees=None,
+):
+    """シャニラジ統合マスターを優先して、同じ回は更新・新しい回は追加する。"""
+    if os.path.exists(RADIO_MASTER_FILE):
+        master_df = load_csv(RADIO_MASTER_FILE).fillna("")
+        required_columns = ["出演回", "初回放送", "放送内容"]
+        for column in required_columns:
+            if column not in master_df.columns:
+                master_df[column] = ""
+
+        same_episode = master_df["出演回"].map(normalize_radio_episode) == str(episode_number)
+        updated_row = {column: "" for column in master_df.columns}
+        if same_episode.any():
+            # 既存の出演者・MC・URLなど、フォームで扱わない情報は残す。
+            updated_row.update(master_df.loc[same_episode].iloc[-1].to_dict())
+        updated_row.update({
+            "出演回": str(episode_number),
+            "放送内容": title,
+            "初回放送": broadcast_at,
+        })
+        # 空欄のまま保存しても、すでに登録済みの補足情報は消さない。
+        optional_values = {
+            "マンスリーMC": "、".join(monthly_mcs or []),
+            "ゲスト": "、".join(guests or []),
+            "ユニット回": unit_name.strip(),
+            "公式配信URL": official_url.strip(),
+            "備考": note.strip(),
+        }
+        for column, value in optional_values.items():
+            if value:
+                updated_row[column] = value
+        # ユニット回では、欠席が空でも既存の値を消して参加状況を正しく更新する。
+        if absentees is not None:
+            updated_row["欠席"] = "、".join(absentees)
+        save_dataframe(
+            pd.concat([master_df.loc[~same_episode], pd.DataFrame([updated_row])], ignore_index=True),
+            RADIO_MASTER_FILE,
+            create_backup=True,
+        )
+        return
+
+    # 統合マスターがない古い環境だけは、従来のTSVへ追加する。
     file_existed = os.path.exists(RADIO_EPISODE_FILE)
     if file_existed:
         create_single_backup(RADIO_EPISODE_FILE)
@@ -1573,6 +1622,32 @@ def append_radio_episode_row(episode_number, title, broadcast_at):
         csv.writer(handle, delimiter="\t").writerow([episode_number, title, broadcast_at])
     _load_csv_cached.clear()
     _load_normalized_csv_cached.clear()
+
+
+def replace_radio_appearance_rows(episode_number, cast_names):
+    """選択したMC・ゲストを、その回の出演履歴にも反映する。"""
+    if not cast_names:
+        return
+    if os.path.exists(RADIO_APPEARANCE_FILE):
+        appearance_df = load_csv(RADIO_APPEARANCE_FILE).fillna("")
+    else:
+        appearance_df = pd.DataFrame(columns=["キャスト", "出演回"])
+    for column in ["キャスト", "出演回"]:
+        if column not in appearance_df.columns:
+            appearance_df[column] = ""
+
+    target_episode = str(episode_number)
+    other_rows = appearance_df[
+        appearance_df["出演回"].map(normalize_radio_episode) != target_episode
+    ]
+    new_rows = pd.DataFrame(
+        [{"キャスト": cast_name, "出演回": target_episode} for cast_name in dict.fromkeys(cast_names)]
+    )
+    save_dataframe(
+        pd.concat([other_rows, new_rows], ignore_index=True),
+        RADIO_APPEARANCE_FILE,
+        create_backup=os.path.exists(RADIO_APPEARANCE_FILE),
+    )
 
 
 def upsert_csv_row(file_path, row, expected_columns, key_columns):
@@ -4827,9 +4902,12 @@ if os.path.exists(SETLIST_FILE):
         )
         register_modes = [
             "🧭 新着情報から更新する",
+            "🗺️ 更新ガイド・まとめ入力",
             "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
             "👗 衣装マスタ追加",
             "🎵 アルバム・楽曲マスタ追加",
+            "🎼 楽曲の実装・収録状況を更新",
+            "💿 発売・Blu-ray・価格を更新",
             "👤 アイドル・キャストを追加",
             "🃏 カード・シナリオ実装を登録",
             "📝 楽曲の分類・歌詞・公式リンクを登録",
@@ -5093,6 +5171,8 @@ if os.path.exists(SETLIST_FILE):
                     "開催予定の公演",
                     "新しいCD・アルバム",
                     "発売予定のCD・アルバム",
+                    "新しいBlu-ray・特典映像",
+                    "楽曲の実装・ソロコレ・MV公開情報",
                     "新しいMV・公式動画",
                     "公式生配信・番組",
                     "次回シャニラジ",
@@ -5110,7 +5190,9 @@ if os.path.exists(SETLIST_FILE):
                 "新しい公演": "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
                 "開催予定の公演": "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
                 "新しいCD・アルバム": "🎵 アルバム・楽曲マスタ追加",
-                "発売予定のCD・アルバム": "🎵 アルバム・楽曲マスタ追加",
+                "発売予定のCD・アルバム": "💿 発売・Blu-ray・価格を更新",
+                "新しいBlu-ray・特典映像": "💿 発売・Blu-ray・価格を更新",
+                "楽曲の実装・ソロコレ・MV公開情報": "🎼 楽曲の実装・収録状況を更新",
                 "新しいMV・公式動画": "🧩 統合リンクを登録",
                 "新しいカード・シナリオ": "🃏 カード・シナリオ実装を登録",
                 "新しい衣装": "👗 衣装マスタ追加",
@@ -5133,8 +5215,14 @@ if os.path.exists(SETLIST_FILE):
                     "ジャケットは必要になった時点で、次に『ジャケット情報を登録』から追加できます。",
                 ],
                 "発売予定のCD・アルバム": [
-                    "発売日とCD名だけ先に登録できます。収録曲が未発表なら空欄で大丈夫です。",
-                    "収録曲やジャケットが公開されたら、後から追加できます。",
+                    "発売日・品番・価格・アーティストを先に登録できます。収録曲が未発表でも大丈夫です。",
+                    "収録曲やジャケットが公開されたら、後から『アルバム・楽曲マスタ』へ追加します。",
+                ],
+                "新しいBlu-ray・特典映像": [
+                    "Blu-ray本編、通常版・初回版の内容、別公演の特典映像までまとめて登録できます。",
+                ],
+                "楽曲の実装・ソロコレ・MV公開情報": [
+                    "楽曲ごとに、enza／シャニソン実装日、追加周期、MV公開日、ソロコレ、歌い分けなどを更新します。",
                 ],
                 "新しいMV・公式動画": [
                     "楽曲名とYouTube URLを入力します。",
@@ -5144,7 +5232,7 @@ if os.path.exists(SETLIST_FILE):
                     "番組名・初回放送日時・出演者を登録します。URLは発表済みの場合だけで構いません。",
                 ],
                 "次回シャニラジ": [
-                    "回数・放送内容・初回放送日時を登録します。出演者の情報は分かった時点で、出演履歴の登録画面から追加できます。",
+                    "回数・タイトル・初回放送日時に加え、マンスリーMC・ゲスト・公式配信URLも登録できます。",
                 ],
                 "新しいカード・シナリオ": [
                     "カードならアイドル・ゲーム・P/S・レア度・カード名・実装日を入力します。",
@@ -5181,7 +5269,9 @@ if os.path.exists(SETLIST_FILE):
                     broadcast_date = st.date_input("放送日 *", datetime.now().date())
                     broadcast_time = st.time_input("開始時刻（任意）", value=None)
                     broadcast_casts = st.text_input("出演者（任意）", placeholder="例：関根瞳；近藤玲奈")
-                    broadcast_url = st.text_input("番組URL（任意）", placeholder="https://www.youtube.com/...")
+                    broadcast_category = st.text_input("分類（任意）", placeholder="例：シャニマス生配信、ライブ直前生配信")
+                    broadcast_notice_url = st.text_input("告知URL（任意）", placeholder="https://idolmaster-official.jp/...")
+                    broadcast_archive_url = st.text_input("アーカイブURL（任意）", placeholder="https://www.youtube.com/...")
                     submit_broadcast = st.form_submit_button("💾 公式番組として登録", type="primary")
                 if submit_broadcast:
                     if not broadcast_name.strip():
@@ -5190,36 +5280,157 @@ if os.path.exists(SETLIST_FILE):
                         broadcast_at = broadcast_date.strftime("%Y/%m/%d")
                         if broadcast_time is not None:
                             broadcast_at += f" {broadcast_time.strftime('%H:%M')}"
-                        append_csv_rows(
+                        upsert_csv_row(
                             BROADCAST_FILE,
-                            [{
+                            {
                                 "放送内容": broadcast_name.strip(),
+                                "分類": broadcast_category.strip(),
                                 "初回放送": broadcast_at,
                                 "出演者": broadcast_casts.strip(),
-                                "URL": broadcast_url.strip(),
-                            }],
-                            ["放送内容", "初回放送", "出演者", "URL"],
+                                "告知サイト": broadcast_notice_url.strip(),
+                                "アーカイブ": broadcast_archive_url.strip(),
+                            },
+                            ["放送内容", "分類", "出演者", "初回放送", "告知サイト", "まとめ", "お知らせまとめ2", "お知らせまとめ3", "アーカイブ"],
+                            ["放送内容", "初回放送"],
                         )
                         st.success("公式番組を登録しました。")
                         st.rerun()
 
             else:  # 次回シャニラジ
                 with st.form("guided_radio_form", clear_on_submit=True):
+                    st.caption("同じ回数を登録した場合は更新します。空欄の項目は、すでに登録済みの情報を残します。MC・ゲストを選ぶと出演履歴にも反映されます。ユニット回では、選ばなかった同ユニットのキャストを欠席として自動登録します。")
                     radio_episode = st.text_input("回数 *", placeholder="例：400")
-                    radio_title = st.text_input("放送内容 *", placeholder="例：#400 アルストロメリア回")
-                    radio_date = st.date_input("放送日 *", datetime.now().date())
-                    radio_time = st.time_input("開始時刻（任意）", value=None)
-                    submit_radio = st.form_submit_button("💾 シャニラジ予定として登録", type="primary")
+                    radio_title = st.text_input("放送内容・タイトル *", placeholder="例：#400 アルストロメリア回")
+                    radio_date = st.date_input("初回放送日 *", datetime.now().date())
+                    radio_time = st.time_input("初回放送時刻 *", value=datetime.strptime("17:00", "%H:%M").time())
+
+                    radio_cast_choices = [cast_name for cast_name in cast_list if cast_name != "成海瑠奈"]
+                    radio_mc_col, radio_guest_col = st.columns(2)
+                    with radio_mc_col:
+                        radio_monthly_mcs = st.multiselect(
+                            "マンスリーMC（任意）",
+                            radio_cast_choices,
+                            help="複数いる場合も選べます。",
+                        )
+                    with radio_guest_col:
+                        radio_guests = st.multiselect(
+                            "ゲスト（任意）",
+                            radio_cast_choices,
+                            help="分かっている出演者だけ選べます。",
+                        )
+
+                    radio_unit_options = ["（ユニット回ではない）"] + unique_in_registered_order(group_to_casts_map.keys()) + ["自由入力"]
+                    radio_unit_choice = st.selectbox(
+                        "ユニット回（任意）",
+                        radio_unit_options,
+                        help="選んだユニットで、MC・ゲストとして選ばなかったキャストは欠席として自動登録します。",
+                    )
+                    radio_unit_custom = ""
+                    if radio_unit_choice == "自由入力":
+                        radio_unit_custom = st.text_input("ユニット名 *", placeholder="例：新ユニット名")
+                    radio_other_guests = st.text_input(
+                        "その他のゲスト（任意）",
+                        placeholder="キャスト以外のゲスト名。複数いる場合は「、」で区切る",
+                    )
+                    radio_url = st.text_input("公式動画・配信URL（任意）", placeholder="https://asobichannel.asobistore.jp/...")
+                    radio_note = st.text_input("備考（任意）", placeholder="例：後半あり、初回配信前")
+                    submit_radio = st.form_submit_button("💾 シャニラジを追加・更新", type="primary")
                 if submit_radio:
                     if not radio_episode.strip().isdigit() or not radio_title.strip():
                         st.error("回数は数字で、放送内容も入力してください。")
                     else:
-                        radio_at = radio_date.strftime("%Y/%m/%d")
-                        if radio_time is not None:
-                            radio_at += f" {radio_time.strftime('%H:%M')}"
-                        append_radio_episode_row(radio_episode.strip(), radio_title.strip(), radio_at)
-                        st.success("次回シャニラジを登録しました。")
+                        weekday_labels = ["月", "火", "水", "木", "金", "土", "日"]
+                        radio_at = (
+                            f"{radio_date.strftime('%Y/%m/%d')}"
+                            f"({weekday_labels[radio_date.weekday()]}) {radio_time.strftime('%H:%M')}"
+                        )
+                        radio_unit_name = (
+                            radio_unit_custom.strip()
+                            if radio_unit_choice == "自由入力"
+                            else ("" if radio_unit_choice == "（ユニット回ではない）" else radio_unit_choice)
+                        )
+                        internal_guests = [*radio_monthly_mcs, *radio_guests]
+                        external_guests = [
+                            name.strip()
+                            for name in re.split(r"[、,，;；\n]", radio_other_guests)
+                            if name.strip()
+                        ]
+                        unit_members = [
+                            cast_name
+                            for cast_name in group_to_casts_map.get(radio_unit_name, [])
+                            if cast_name != "成海瑠奈"
+                        ]
+                        unit_absentees = (
+                            [cast_name for cast_name in unit_members if cast_name not in internal_guests]
+                            if radio_unit_name and unit_members else None
+                        )
+                        upsert_radio_episode_row(
+                            radio_episode.strip(),
+                            radio_title.strip(),
+                            radio_at,
+                            monthly_mcs=radio_monthly_mcs,
+                            guests=[*radio_guests, *external_guests],
+                            unit_name=radio_unit_name,
+                            official_url=radio_url,
+                            note=radio_note,
+                            absentees=unit_absentees,
+                        )
+                        replace_radio_appearance_rows(
+                            radio_episode.strip(),
+                            internal_guests,
+                        )
+                        st.success("シャニラジの情報を登録しました。")
                         st.rerun()
+
+        elif register_mode == "🗺️ 更新ガイド・まとめ入力":
+            st.subheader("🗺️ 新しい情報が出たときの更新ガイド")
+            st.caption("下から近いものを選ぶと、必要な項目をまとめて入力する画面へ移動します。CSVを直接編集する必要はありません。")
+            update_guides = [
+                (
+                    "🏟️ 新しいライブ・イベントが発表された",
+                    "まず公演名・日付・会場・区分を登録。終演後に同じ画面でセットリスト、歌唱者、衣装を追加します。",
+                    "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録",
+                ),
+                (
+                    "💿 新しいCD・アルバムが発表／発売された",
+                    "発売日・品番・価格・アーティストを登録。収録曲が分かったらアルバムと楽曲を追加し、実装状況も後から更新します。",
+                    "💿 発売・Blu-ray・価格を更新",
+                ),
+                (
+                    "🎼 新曲の実装・MV・ソロコレ情報が出た",
+                    "enza／シャニソン実装日、MV公開、ソロコレ、歌い分けなどを楽曲ごとに更新します。公式リンクもここから別途追加できます。",
+                    "🎼 楽曲の実装・収録状況を更新",
+                ),
+                (
+                    "📀 Blu-rayの発売・特典・収録内容が発表された",
+                    "商品情報、通常版と初回・特装版の内容、別公演の特典映像、価格推移を登録します。",
+                    "💿 発売・Blu-ray・価格を更新",
+                ),
+                (
+                    "📺 生配信・シャニラジの次回情報が出た",
+                    "番組は新着情報から、シャニラジは回数・タイトル・MC・ゲスト・配信URLまでまとめて登録します。",
+                    "🧭 新着情報から更新する",
+                ),
+                (
+                    "🔗 MV・試聴・PV・公演サイトなどのURLが公開された",
+                    "楽曲・アルバム・公演のどれに関するリンクかを選べば、対応する保存先へ自動で振り分けます。",
+                    "🧩 統合リンクを登録",
+                ),
+                (
+                    "🃏 カード・衣装・出演者情報が追加された",
+                    "カード／シナリオ、衣装、参加履歴、アイドル・キャストの各専用フォームを使います。",
+                    "🃏 カード・シナリオ実装を登録",
+                ),
+            ]
+            for index, (title, description, target_mode) in enumerate(update_guides):
+                guide_col, go_col = st.columns([5, 1])
+                with guide_col:
+                    st.markdown(f"**{title}**  \\n{description}")
+                with go_col:
+                    if st.button("入力へ", key=f"update_guide_go_{index}", use_container_width=True):
+                        st.session_state["tab7_register_mode"] = target_mode
+                        st.rerun()
+                st.divider()
 
         elif register_mode == "🎤 セットリスト（ライブ歌唱）＆公演マスタ登録":
             st.subheader("🎤 公演・セットリストを登録／更新")
@@ -5554,6 +5765,180 @@ if os.path.exists(SETLIST_FILE):
                             )
 
                         st.success(f"🎉 アルバム「{new_album_name}」と収録楽曲 ({len(song_entries)}曲) を登録／更新しました！")
+
+        elif register_mode == "🎼 楽曲の実装・収録状況を更新":
+            st.subheader("🎼 楽曲の実装・収録状況を更新")
+            st.caption("曲名と収録アルバムを指定して、ゲーム実装・MV・ソロコレなどの判明した項目だけ追加できます。空欄は既存の情報を残します。")
+            known_song_detail_options = unique_in_registered_order(
+                song_album_df["楽曲名"].dropna().astype(str).tolist()
+                if "楽曲名" in song_album_df.columns else []
+            )
+            known_album_detail_options = unique_in_registered_order(
+                song_album_df["アルバム"].dropna().astype(str).tolist()
+                if "アルバム" in song_album_df.columns else []
+            )
+            with st.form("song_availability_detail_form"):
+                song_detail_mode = st.radio("楽曲名の指定", ["登録済みから選択", "手入力"], horizontal=True)
+                if song_detail_mode == "登録済みから選択" and known_song_detail_options:
+                    song_detail_name = st.selectbox("楽曲名 *", known_song_detail_options)
+                else:
+                    song_detail_name = st.text_input("楽曲名 *")
+                album_detail_mode = st.radio("収録アルバムの指定", ["登録済みから選択", "手入力"], horizontal=True)
+                if album_detail_mode == "登録済みから選択" and known_album_detail_options:
+                    song_detail_album = st.selectbox("収録アルバム *", known_album_detail_options)
+                else:
+                    song_detail_album = st.text_input("収録アルバム *")
+
+                detail_col1, detail_col2, detail_col3 = st.columns(3)
+                with detail_col1:
+                    detail_singer = st.text_input("歌唱者（任意）")
+                    detail_enza = st.text_input("enza実装（任意）", placeholder="例：2026/08/01")
+                    detail_shiny_song = st.text_input("シャニソン実装（任意）", placeholder="例：2026/08/01")
+                    detail_cycle = st.text_input("シャニソンでの追加周期（任意）", placeholder="例：新曲4週目")
+                with detail_col2:
+                    detail_mv_date = st.text_input("MV公開日（任意）", placeholder="例：2026/02/27")
+                    detail_solo = st.text_input("ソロ歌唱（任意）", placeholder="例：あり／櫻木真乃")
+                    detail_solo_collection = st.text_input("ソロコレ収録（任意）", placeholder="例：SOLO COLLECTION 01")
+                    detail_solo_release = st.text_input("ソロコレ発売日（任意）", placeholder="例：2025/01/01")
+                with detail_col3:
+                    detail_unit_version = st.text_input("ユニット版収録（任意）")
+                    detail_initial_solo = st.text_input("初収録CDソロ歌唱（任意）")
+                    detail_arrangement = st.text_input("歌い分け（任意）")
+                    detail_other = st.text_input("補足（歓声・定点・視点追加など、任意）")
+
+                save_song_detail = st.form_submit_button("💾 楽曲の詳細を保存", type="primary")
+            if save_song_detail:
+                if not song_detail_name.strip() or not song_detail_album.strip():
+                    st.error("楽曲名と収録アルバムを入力してください。")
+                else:
+                    old_song_album_df = load_csv(SONG_ALBUM_FILE).fillna("") if os.path.exists(SONG_ALBUM_FILE) else pd.DataFrame()
+                    matching_song = (
+                        old_song_album_df[
+                            (old_song_album_df.get("楽曲名", pd.Series(dtype=str)).astype(str) == song_detail_name.strip())
+                            & (old_song_album_df.get("アルバム", pd.Series(dtype=str)).astype(str) == song_detail_album.strip())
+                        ] if not old_song_album_df.empty else pd.DataFrame()
+                    )
+                    if not matching_song.empty:
+                        song_number = matching_song.iloc[0].get("Column 7", "")
+                    elif "Column 7" in old_song_album_df.columns:
+                        number_series = pd.to_numeric(old_song_album_df["Column 7"], errors="coerce")
+                        song_number = int(number_series.max()) + 1 if number_series.notna().any() else 1
+                    else:
+                        song_number = 1
+                    detail_row = {
+                        "Column 7": song_number,
+                        "楽曲名": song_detail_name.strip(),
+                        "アルバム": song_detail_album.strip(),
+                        "歌唱者": detail_singer.strip(),
+                        "enza実装": detail_enza.strip(),
+                        "シャニソン実装": detail_shiny_song.strip(),
+                        "シャニソン周期": detail_cycle.strip(),
+                        "MV公開": detail_mv_date.strip(),
+                        "ソロ歌唱": detail_solo.strip(),
+                        "ソロコレ": detail_solo_collection.strip(),
+                        "ソロコレ発売日": detail_solo_release.strip(),
+                        "ユニット版収録": detail_unit_version.strip(),
+                        "初収録CDソロ歌唱": detail_initial_solo.strip(),
+                        "歌い分け": detail_arrangement.strip(),
+                        "定点＆縦画面": detail_other.strip(),
+                    }
+                    merge_csv_rows(
+                        SONG_ALBUM_FILE,
+                        [detail_row],
+                        list(detail_row.keys()),
+                        ["楽曲名", "アルバム"],
+                    )
+                    st.success("楽曲の実装・収録状況を保存しました。")
+                    st.rerun()
+
+        elif register_mode == "💿 発売・Blu-ray・価格を更新":
+            st.subheader("💿 発売・Blu-ray・価格を更新")
+            st.caption("CD発売予定、Blu-ray商品、別公演の特典映像、価格履歴を1か所から登録できます。")
+            release_entry_type = st.radio(
+                "登録する内容",
+                ["発売予定のCD・アルバム", "Blu-ray商品", "特典映像・別公演収録", "価格履歴"],
+                horizontal=True,
+            )
+            if release_entry_type == "発売予定のCD・アルバム":
+                with st.form("upcoming_release_form"):
+                    release_name = st.text_input("CD・アルバム名 *")
+                    release_date = st.date_input("発売日 *", datetime.now().date())
+                    release_artist = st.text_input("アーティスト（任意）")
+                    release_catalog = st.text_input("品番（任意）")
+                    release_price = st.text_input("価格（任意）", placeholder="例：3,960円（税込）")
+                    save_release = st.form_submit_button("💾 発売予定を保存", type="primary")
+                if save_release:
+                    if not release_name.strip():
+                        st.error("CD・アルバム名を入力してください。")
+                    else:
+                        upsert_csv_row(
+                            UPCOMING_RELEASE_FILE,
+                            {"アルバム名": release_name.strip(), "発売日": release_date.strftime("%Y/%m/%d"), "アーティスト": release_artist.strip(), "品番": release_catalog.strip(), "価格": release_price.strip()},
+                            ["アルバム名", "発売日", "アーティスト", "品番", "価格"],
+                            ["アルバム名", "発売日"],
+                        )
+                        st.success("発売予定を保存しました。収録曲が判明したら『アルバム・楽曲マスタ』へ追加してください。")
+                        st.rerun()
+            elif release_entry_type == "Blu-ray商品":
+                with st.form("blu_ray_catalog_form"):
+                    blu_ray_name = st.text_input("商品名 *")
+                    blu_ray_date = st.date_input("発売日 *", datetime.now().date())
+                    blu_ray_main = st.text_area("本編収録（任意）", placeholder="例：DAY1・DAY2ライブ本編")
+                    blu_ray_limited = st.text_area("初回・特装版特典（任意）")
+                    blu_ray_standard = st.text_area("通常版の内容（任意）")
+                    blu_ray_note = st.text_area("補足（任意）")
+                    save_blu_ray = st.form_submit_button("💾 Blu-ray商品を保存", type="primary")
+                if save_blu_ray:
+                    if not blu_ray_name.strip():
+                        st.error("商品名を入力してください。")
+                    else:
+                        upsert_csv_row(
+                            LIVE_BLU_RAY_CATALOG_FILE,
+                            {"商品名": blu_ray_name.strip(), "発売日": blu_ray_date.strftime("%Y/%m/%d"), "本編収録": blu_ray_main.strip(), "初回・特装版特典": blu_ray_limited.strip(), "通常版の内容": blu_ray_standard.strip(), "補足": blu_ray_note.strip()},
+                            ["商品名", "発売日", "本編収録", "初回・特装版特典", "通常版の内容", "補足"],
+                            ["商品名"],
+                        )
+                        st.success("Blu-ray商品を保存しました。")
+                        st.rerun()
+            elif release_entry_type == "特典映像・別公演収録":
+                with st.form("live_video_bonus_form"):
+                    bonus_event = st.text_input("収録される公演 *")
+                    bonus_product = st.text_input("収録商品 *")
+                    bonus_scope = st.text_input("収録範囲（任意）", placeholder="例：DAY2本編／シャッフルパートのみ")
+                    bonus_description = st.text_area("収録内容・補足（任意）")
+                    save_bonus = st.form_submit_button("💾 特典映像を保存", type="primary")
+                if save_bonus:
+                    if not bonus_event.strip() or not bonus_product.strip():
+                        st.error("収録される公演と収録商品を入力してください。")
+                    else:
+                        upsert_csv_row(
+                            LIVE_VIDEO_BONUS_FILE,
+                            {"対象公演": bonus_event.strip(), "収録商品": bonus_product.strip(), "収録範囲": bonus_scope.strip(), "収録内容": bonus_description.strip()},
+                            ["対象公演", "収録商品", "収録範囲", "収録内容"],
+                            ["対象公演", "収録商品"],
+                        )
+                        st.success("特典映像の情報を保存しました。")
+                        st.rerun()
+            else:
+                with st.form("price_history_form"):
+                    price_target = st.text_input("対象名 *", placeholder="例：商品名・チケット名")
+                    price_category = st.text_input("カテゴリ *", placeholder="例：Blu-ray／チケット")
+                    price_kind = st.text_input("価格種別 *", placeholder="例：通常版／アソビストア特装版")
+                    price_value = st.text_input("価格 *", placeholder="例：12,100円")
+                    price_date = st.date_input("日付 *", datetime.now().date())
+                    save_price = st.form_submit_button("💾 価格履歴を保存", type="primary")
+                if save_price:
+                    if not all([price_target.strip(), price_category.strip(), price_kind.strip(), price_value.strip()]):
+                        st.error("対象名・カテゴリ・価格種別・価格を入力してください。")
+                    else:
+                        upsert_csv_row(
+                            PRICE_HISTORY_FILE,
+                            {"対象名": price_target.strip(), "カテゴリ": price_category.strip(), "価格種別": price_kind.strip(), "価格": price_value.strip(), "日付": price_date.strftime("%Y/%m/%d")},
+                            ["対象名", "カテゴリ", "価格種別", "価格", "日付"],
+                            ["対象名", "価格種別", "日付"],
+                        )
+                        st.success("価格履歴を保存しました。")
+                        st.rerun()
 
         elif register_mode == "👤 アイドル・キャストを追加":
             st.subheader("👤 アイドル・キャストを追加")
@@ -5907,7 +6292,7 @@ if os.path.exists(SETLIST_FILE):
 
         elif register_mode == "🖼️ ジャケット情報を登録":
             st.subheader("🖼️ ジャケット情報を登録")
-            st.caption("先に画像ファイルを album_jackets フォルダへ入れ、そのファイル名を指定します。同じアルバムでも、曲ごとに別ジャケットを指定できます。")
+            st.caption("ローカル画像ファイル名、公式詳細ページ、画像URLをまとめて登録できます。同じアルバムでも、曲ごとに別ジャケットを指定できます。")
             with st.form("add_jacket_map_form"):
                 jacket_target_type = st.radio(
                     "ジャケットの使い方:",
@@ -5918,10 +6303,12 @@ if os.path.exists(SETLIST_FILE):
                 jacket_song_name = ""
                 if jacket_target_type == "この曲だけ別ジャケット":
                     jacket_song_name = st.text_input("楽曲名 *")
-                jacket_file_name = st.text_input("画像ファイル名 *", placeholder="例: LACM-12345.jpg")
+                jacket_file_name = st.text_input("ローカル画像ファイル名（任意）", placeholder="例: LACM-12345.jpg")
+                jacket_official_page = st.text_input("公式詳細ページURL（任意）")
+                jacket_image_url = st.text_input("画像URL（任意）")
                 if st.form_submit_button("💾 ジャケット対応を保存", type="primary"):
                     required_song_name = jacket_target_type == "この曲だけ別ジャケット"
-                    if not jacket_album_name.strip() or not jacket_file_name.strip() or (required_song_name and not jacket_song_name.strip()):
+                    if not jacket_album_name.strip() or not (jacket_file_name.strip() or jacket_official_page.strip() or jacket_image_url.strip()) or (required_song_name and not jacket_song_name.strip()):
                         st.error("⚠️ 必須項目を入力してください。")
                     else:
                         if jacket_target_type == "この曲だけ別ジャケット":
@@ -5939,8 +6326,13 @@ if os.path.exists(SETLIST_FILE):
                         else:
                             upsert_csv_row(
                                 JACKET_MAP_FILE,
-                                {"アルバム名": jacket_album_name.strip(), "ジャケット画像ファイル": jacket_file_name.strip()},
-                                ["アルバム名", "ジャケット画像ファイル"],
+                                {
+                                    "アルバム名": jacket_album_name.strip(),
+                                    "公式詳細ページ": jacket_official_page.strip(),
+                                    "画像URL": jacket_image_url.strip(),
+                                    "ジャケット画像ファイル": jacket_file_name.strip(),
+                                },
+                                ["アルバム名", "公式詳細ページ", "画像URL", "ジャケット画像ファイル"],
                                 ["アルバム名"],
                             )
                             st.success("🎉 アルバム共通ジャケットを保存しました。")
@@ -6091,7 +6483,7 @@ if os.path.exists(SETLIST_FILE):
         elif register_mode == "🧩 統合リンクを登録":
             st.subheader("🧩 公式リンクをまとめて登録")
             st.caption("入力した内容は、保存時に種類ごとのCSVへ自動で振り分けます。確認・修正は従来どおり個別CSVで行えます。")
-            unified_link_columns = ["登録先", "楽曲名", "対象アルバム", "対象公演", "種別", "表示名", "URL", "確認状態"]
+            unified_link_columns = ["登録先", "楽曲名", "対象アルバム", "対象公演", "対象", "出演回", "周年", "種別", "表示名", "URL", "確認状態"]
             st.caption("登録先を選び、必要な項目だけ入力してください。複数件を登録リストへためてから、まとめて保存できます。")
             uploaded_link_csv = None
             if uploaded_link_csv is not None:
@@ -6119,6 +6511,9 @@ if os.path.exists(SETLIST_FILE):
                             "XR無料配信": (YOUTUBE_XR_INTRO_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"]),
                             "公演公式サイト": (EVENT_OFFICIAL_SITE_FILE, ["対象公演", "公式サイトURL"]),
                             "公演SNSリンク": (EVENT_SOCIAL_LINKS_FILE, ["対象公演", "種別", "URL"]),
+                            "ユニット・企画PV": (YOUTUBE_UNIT_PV_FILE, ["対象", "区分", "YouTube_URL"]),
+                            "シャニラジ切り抜き": (YOUTUBE_RADIO_CLIP_FILE, ["出演回", "YouTube_URL"]),
+                            "周年PV・記念動画": (YOUTUBE_ANNIVERSARY_PV_FILE, ["周年", "種別", "YouTube_URL"]),
                         }
                         skipped_rows = []
                         for row_number, incoming_row in incoming_links.iterrows():
@@ -6132,8 +6527,12 @@ if os.path.exists(SETLIST_FILE):
                                 "楽曲名": row["楽曲名"],
                                 "対象アルバム": row["対象アルバム"],
                                 "対象公演": row["対象公演"],
+                                "対象": row["対象"],
+                                "出演回": row["出演回"],
+                                "周年": row["周年"],
                                 "アルバム": row["対象アルバム"],
                                 "種別": row["種別"],
+                                "区分": row["種別"],
                                 "バージョン表示": row["表示名"],
                                 "YouTube_URL": row["URL"],
                                 "URL": row["URL"],
@@ -6165,6 +6564,9 @@ if os.path.exists(SETLIST_FILE):
                 "XR無料配信": (YOUTUBE_XR_INTRO_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"], "対象公演"),
                 "公演公式サイト": (EVENT_OFFICIAL_SITE_FILE, ["対象公演", "公式サイトURL"], "対象公演"),
                 "公演SNSリンク": (EVENT_SOCIAL_LINKS_FILE, ["対象公演", "種別", "URL"], "対象公演"),
+                "ユニット・企画PV": (YOUTUBE_UNIT_PV_FILE, ["対象", "区分", "YouTube_URL"], "対象"),
+                "シャニラジ切り抜き": (YOUTUBE_RADIO_CLIP_FILE, ["出演回", "YouTube_URL"], "出演回"),
+                "周年PV・記念動画": (YOUTUBE_ANNIVERSARY_PV_FILE, ["周年", "種別", "YouTube_URL"], "周年"),
             }
             if "unified_link_pending_rows" not in st.session_state:
                 st.session_state["unified_link_pending_rows"] = []
@@ -6176,6 +6578,9 @@ if os.path.exists(SETLIST_FILE):
                     entry_album = st.text_input("対象アルバム（アルバム試聴・Migratory Echoes用）")
                     entry_event = st.text_input("対象公演（ライブ映像・公演リンクの場合）")
                 with entry_col2:
+                    entry_target = st.text_input("対象（ユニット・企画PV用）")
+                    entry_episode = st.text_input("出演回（シャニラジ切り抜き用）")
+                    entry_anniversary = st.text_input("周年（周年PV用）", placeholder="例：7周年")
                     entry_type = st.text_input("種別", placeholder="例：MV、公式ライブ映像、公式サイト")
                     entry_label = st.text_input("表示名（別バージョン名など・任意）")
                     entry_status = st.selectbox("確認状態", ["確認済み", "要確認"], index=0)
@@ -6183,7 +6588,14 @@ if os.path.exists(SETLIST_FILE):
                 add_pending_link = st.form_submit_button("＋ この内容を登録リストに追加", type="primary")
             if add_pending_link:
                 _, _, required_field = link_destinations[entry_destination]
-                target_value = {"楽曲名": entry_song, "対象アルバム": entry_album, "対象公演": entry_event}[required_field]
+                target_value = {
+                    "楽曲名": entry_song,
+                    "対象アルバム": entry_album,
+                    "対象公演": entry_event,
+                    "対象": entry_target,
+                    "出演回": entry_episode,
+                    "周年": entry_anniversary,
+                }[required_field]
                 if not target_value.strip() or not entry_url.strip():
                     st.error(f"「{required_field}」とURLを入力してください。")
                 else:
@@ -6192,6 +6604,9 @@ if os.path.exists(SETLIST_FILE):
                         "楽曲名": entry_song.strip(),
                         "対象アルバム": entry_album.strip(),
                         "対象公演": entry_event.strip(),
+                        "対象": entry_target.strip(),
+                        "出演回": entry_episode.strip(),
+                        "周年": entry_anniversary.strip(),
                         "種別": entry_type.strip() or entry_destination,
                         "表示名": entry_label.strip(),
                         "URL": entry_url.strip(),
@@ -6212,8 +6627,12 @@ if os.path.exists(SETLIST_FILE):
                             "楽曲名": pending_row["楽曲名"],
                             "対象アルバム": pending_row["対象アルバム"],
                             "対象公演": pending_row["対象公演"],
+                            "対象": pending_row["対象"],
+                            "出演回": pending_row["出演回"],
+                            "周年": pending_row["周年"],
                             "アルバム": pending_row["対象アルバム"],
                             "種別": pending_row["種別"],
+                            "区分": pending_row["種別"],
                             "バージョン表示": pending_row["表示名"],
                             "YouTube_URL": pending_row["URL"],
                             "URL": pending_row["URL"],
