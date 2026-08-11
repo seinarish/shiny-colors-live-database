@@ -186,6 +186,34 @@ def prepare_public_data_sync() -> list[str]:
     ]
 
 
+def get_public_data_sync_summary(files: list[str] | None = None) -> list[dict[str, object]]:
+    """Summarize local changes against the currently published revision."""
+    _ensure_publish_repository(allow_prepared_data=True)
+    target_files = prepare_public_data_sync() if files is None else list(files)
+    if not target_files:
+        return []
+
+    numstat_text = _run(
+        ["git", "diff", "--numstat", "HEAD", "--", *target_files],
+        PUBLIC_REPOSITORY,
+    )
+    stats: dict[str, tuple[str, str]] = {}
+    for line in numstat_text.splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) == 3:
+            stats[parts[2]] = (parts[0], parts[1])
+
+    summary: list[dict[str, object]] = []
+    for file_name in target_files:
+        added, removed = stats.get(file_name, ("0", "0"))
+        summary.append({
+            "ファイル": file_name,
+            "追加・変更行": int(added) if added.isdigit() else added,
+            "削除行": int(removed) if removed.isdigit() else removed,
+        })
+    return summary
+
+
 def discard_prepared_public_data() -> None:
     """旧コピー方式との互換用。現在はローカルの編集内容を消さない。"""
     # 現在は同じフォルダの内容をそのまま確認してから公開する方式なので、
@@ -193,12 +221,19 @@ def discard_prepared_public_data() -> None:
     return None
 
 
-def publish_prepared_public_data() -> tuple[str, list[str]]:
+def publish_prepared_public_data(selected_files: list[str] | None = None) -> tuple[str, list[str]]:
     """確認済みのCSV/TSV差分だけをコミットして公開版へ送る。"""
     _ensure_publish_repository(allow_prepared_data=True)
-    changed_before_stage = prepare_public_data_sync()
-    if not changed_before_stage:
+    pending_files = prepare_public_data_sync()
+    if not pending_files:
         return "公開用データに差分はありません。", []
+
+    changed_before_stage = pending_files if selected_files is None else list(selected_files)
+    invalid_files = sorted(set(changed_before_stage) - set(pending_files))
+    if invalid_files:
+        raise PublicPublishError("公開対象ではないファイルが選ばれています。もう一度確認してください。")
+    if not changed_before_stage:
+        return "公開するファイルを選択してください。", []
 
     already_staged = _run(["git", "diff", "--cached", "--name-only"], PUBLIC_REPOSITORY)
     if already_staged.strip():

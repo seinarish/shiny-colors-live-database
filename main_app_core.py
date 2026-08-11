@@ -37,6 +37,7 @@ if not PUBLIC_MODE:
     from public_data_publish import (
         PublicPublishError,
         discard_prepared_public_data,
+        get_public_data_sync_summary,
         prepare_public_data_sync,
         publish_prepared_public_data,
         public_data_file_names,
@@ -6676,7 +6677,10 @@ if os.path.exists(SETLIST_FILE):
                 if st.button("① 公開前の変更を確認", type="primary", use_container_width=True):
                     try:
                         with st.spinner("公開用データを確認しています…"):
-                            st.session_state["public_sync_files"] = prepare_public_data_sync()
+                            pending_files = prepare_public_data_sync()
+                            st.session_state["public_sync_files"] = pending_files
+                            st.session_state["public_sync_summary"] = get_public_data_sync_summary(pending_files)
+                            st.session_state["public_sync_selected_files"] = pending_files
                     except PublicPublishError as exc:
                         st.error(f"確認できませんでした：{exc}")
             with cancel_col:
@@ -6684,6 +6688,8 @@ if os.path.exists(SETLIST_FILE):
                     try:
                         discard_prepared_public_data()
                         st.session_state["public_sync_files"] = []
+                        st.session_state["public_sync_summary"] = []
+                        st.session_state["public_sync_selected_files"] = []
                         st.success("確認用の変更を取り消しました。")
                     except PublicPublishError as exc:
                         st.error(f"取り消せませんでした：{exc}")
@@ -6692,19 +6698,27 @@ if os.path.exists(SETLIST_FILE):
             if public_sync_files:
                 st.success(f"公開版で更新されるデータ：{len(public_sync_files)}件")
                 st.dataframe(
-                    pd.DataFrame({"更新するファイル": public_sync_files}),
+                    pd.DataFrame(st.session_state.get("public_sync_summary", [])),
                     use_container_width=True,
                     hide_index=True,
                 )
-                st.warning("内容をローカルで確認済みなら、次のボタンで公開版に送ります。")
+                selected_public_sync_files = st.multiselect(
+                    "公開するデータを選択",
+                    public_sync_files,
+                    key="public_sync_selected_files",
+                    help="チェックを外したファイルはローカルに残り、公開版には反映されません。",
+                )
+                st.warning("公開版との差分を確認し、反映したいデータだけを選んでください。")
                 if st.button("② 確認済み：公開版へ反映する", type="primary", use_container_width=True):
                     try:
                         with st.spinner("GitHubへ反映しています…"):
-                            result_message, published_files = publish_prepared_public_data()
+                            result_message, published_files = publish_prepared_public_data(selected_public_sync_files)
                         st.success(result_message)
                         if published_files:
                             st.caption("反映したファイル：" + "、".join(published_files))
                         st.session_state["public_sync_files"] = []
+                        st.session_state["public_sync_summary"] = []
+                        st.session_state["public_sync_selected_files"] = []
                     except PublicPublishError as exc:
                         st.error(f"公開できませんでした：{exc}")
             else:
