@@ -3526,9 +3526,12 @@ if os.path.exists(SETLIST_FILE):
                 key="rank_target"
             )
         with col_rank_order:
+            rank_order_options = ["多い順", "少ない順", "最終披露からの経過が長い順"]
+            if rank_target == "楽曲":
+                rank_order_options.append("キャストライブ皆勤率（初披露以降）")
             rank_order = st.selectbox(
                 "📐 並び替え順:",
-                ["多い順", "少ない順", "ご無沙汰順（最終披露からの経過日数）"],
+                rank_order_options,
                 key="rank_order"
             )
         with col_rank_unit:
@@ -3537,6 +3540,23 @@ if os.path.exists(SETLIST_FILE):
                     "👗 衣装着用数のカウント方法:",
                     ["楽曲数（パフォーマンス数）", "公演数（イベント数）"],
                     key="costume_count_unit"
+                )
+            elif rank_target == "楽曲" and rank_order == "キャストライブ皆勤率（初披露以降）":
+                min_attendance_denominator = st.number_input(
+                    "📊 分母の下限（対象DAY数）:",
+                    min_value=1,
+                    max_value=100,
+                    value=3,
+                    step=1,
+                    help="DAY1・DAY2をまとめて表示する場合でも、ここだけは各DAYを別々に数えます。",
+                    key="rank_cast_live_attendance_min",
+                )
+                attendance_day_count_mode = st.radio(
+                    "📅 DAY1・DAY2の数え方:",
+                    ["DAYごとに数える", "同じ公演としてまとめる"],
+                    horizontal=True,
+                    help="まとめる場合は、DAY1・DAY2のどちらかで披露されていれば、その公演では披露ありとして扱います。",
+                    key="rank_cast_live_attendance_day_mode",
                 )
 
         target_col_map = {
@@ -3556,7 +3576,187 @@ if os.path.exists(SETLIST_FILE):
                 prep_df[active_col] = prep_df[active_col].str.strip()
                 prep_df = prep_df[prep_df[active_col].astype(bool) & (prep_df[active_col] != "nan")]
 
-            if rank_target == "衣装" and costume_count_unit == "公演数（イベント数）" and live_col_name:
+            if rank_order == "キャストライブ皆勤率（初披露以降）" and rank_target == "楽曲" and live_col_name:
+                # 初披露以降のキャストライブのうち、歌唱ユニットが出演した公演だけを分母にする。
+                # 同じ公演で同ユニットが1曲でも歌っていれば、そのユニットは出演したものとして扱う。
+                def _split_unit_values(value):
+                    return {
+                        item.strip()
+                        for item in re.split(r"[;；]", str(value))
+                        if item.strip() and item.strip().lower() != "nan"
+                    }
+
+                def _attendance_event_key(event_name):
+                    """DAY単位／公演単位を切り替えるための集計キー。"""
+                    event_name = str(event_name).strip()
+                    if attendance_day_count_mode == "DAYごとに数える":
+                        return make_search_key(event_name)
+                    # DAY 表記は場所を問わず除く。公演名末尾の空白・記号の揺れにも左右されない。
+                    event_name = re.sub(
+                        r"\s*DAY\s*\d+\b",
+                        "",
+                        event_name,
+                        flags=re.IGNORECASE,
+                    ).strip()
+                    event_name = re.sub(
+                        r"\s*(?:第\s*\d+\s*(?:回|部)|昼公演|夜公演)\s*$",
+                        "",
+                        event_name,
+                        flags=re.IGNORECASE,
+                    ).strip()
+                    return make_search_key(event_name)
+
+                def _split_people_values(value):
+                    return {
+                        item.strip()
+                        for item in re.split(r"[;；,，、/／]", str(value))
+                        if item.strip() and item.strip().lower() != "nan"
+                    }
+
+                def _original_song_context(song_name, fallback_rows):
+                    """カバー時のユニット表記ではなく、原曲の歌唱者で分母を判定する。"""
+                    original_casts = set()
+                    original_units = set()
+                    has_master_singer = False
+                    if not song_album_df.empty and {"楽曲名", "歌唱者"}.issubset(song_album_df.columns):
+                        song_key = make_search_key(song_name)
+                        master_song_keys = song_album_df.get(
+                            "_song_search_key", song_album_df["楽曲名"].map(make_search_key)
+                        )
+                        master_rows = song_album_df[master_song_keys.eq(song_key)]
+                        for singer_value in master_rows["歌唱者"].dropna().astype(str):
+                            for singer_name in _split_people_values(singer_value):
+                                if singer_name in {"全員", "シャイニーカラーズ", "283プロダクション"}:
+                                    continue
+                                has_master_singer = True
+                                if singer_name in group_to_casts_map:
+                                    original_units.add(singer_name)
+                                    original_casts.update(group_to_casts_map[singer_name])
+                                elif singer_name in idol_to_cast_map:
+                                    original_casts.update(_split_people_values(idol_to_cast_map[singer_name]))
+                                    unit_name = idol_to_unit_map.get(singer_name, "")
+                                    if unit_name:
+                                        original_units.add(unit_name)
+                                elif singer_name in cast_to_idol_map or singer_name in cast_list:
+                                    original_casts.add(singer_name)
+                                    unit_name = idol_to_unit_map.get(singer_name, "")
+                                    if unit_name:
+                                        original_units.add(unit_name)
+                    if not has_master_singer:
+                        for unit_value in fallback_rows.get("ユニット", pd.Series(dtype=str)).tolist():
+                            original_units.update(_split_unit_values(unit_value))
+                    return original_casts, original_units
+
+                cast_live_event_units = {}
+                cast_live_event_casts = {}
+                cast_live_event_dates = {}
+                cast_live_event_songs = {}
+                # 下限の判定だけは常に DAY 単位で保持する。
+                # これにより表示を公演単位にまとめても、下限の基準が半分にならない。
+                cast_live_day_units = {}
+                cast_live_day_casts = {}
+                cast_live_day_dates = {}
+                cast_live_day_to_event = {}
+                singer_column = next((column for column in df.columns if "歌唱者" in str(column)), None)
+                # 分母の出演情報は、ランキング対象外の曲を含む全セットリストから取得する。
+                # カバーの「混合」表記ではなく、原曲歌唱者が出演したかで判定する。
+                for event_name, event_rows in df.groupby(live_col_name, dropna=True):
+                    if not event_rows["公演区分"].astype(str).str.contains("キャストライブ", na=False).any():
+                        continue
+                    event_units = set()
+                    event_casts = set()
+                    for unit_value in event_rows.get("ユニット", pd.Series(dtype=str)).tolist():
+                        event_units.update(_split_unit_values(unit_value))
+                    if singer_column:
+                        for singer_value in event_rows[singer_column].tolist():
+                            event_casts.update(_split_people_values(singer_value))
+                    event_date = event_rows["日付_dt"].dropna().min()
+                    if (event_units or event_casts) and pd.notna(event_date):
+                        day_key = make_search_key(str(event_name).strip())
+                        event_key = _attendance_event_key(event_name)
+                        cast_live_day_units[day_key] = event_units
+                        cast_live_day_casts[day_key] = event_casts
+                        cast_live_day_dates[day_key] = event_date
+                        cast_live_day_to_event[day_key] = event_key
+                        cast_live_event_units.setdefault(event_key, set()).update(event_units)
+                        cast_live_event_casts.setdefault(event_key, set()).update(event_casts)
+                        # 披露ありの判定は公演名を再照合せず、各公演の実セットリストで行う。
+                        # これにより DAY 表記や公演名の表記揺れで 0 回になるのを防ぐ。
+                        cast_live_event_songs.setdefault(event_key, set()).update(
+                            event_rows["集計用楽曲名"].dropna().astype(str).map(make_search_key).tolist()
+                        )
+                        if event_key not in cast_live_event_dates or event_date < cast_live_event_dates[event_key]:
+                            cast_live_event_dates[event_key] = event_date
+
+                attendance_rows = []
+                for song_name, song_rows in ranking_df.groupby(active_col, dropna=True):
+                    all_song_rows = df[df[active_col] == song_name].copy()
+                    first_date = all_song_rows["日付_dt"].dropna().min()
+                    original_casts, original_units = _original_song_context(song_name, all_song_rows)
+                    if pd.isna(first_date) or not (original_casts or original_units):
+                        continue
+                    eligible_events = {
+                        event_name
+                        for event_name, event_units in cast_live_event_units.items()
+                        if cast_live_event_dates[event_name] >= first_date
+                        and (
+                            original_casts.intersection(cast_live_event_casts.get(event_name, set()))
+                            or original_units.intersection(event_units)
+                        )
+                    }
+                    eligible_day_events = {
+                        day_key
+                        for day_key, day_units in cast_live_day_units.items()
+                        if cast_live_day_dates[day_key] >= first_date
+                        and (
+                            original_casts.intersection(cast_live_day_casts.get(day_key, set()))
+                            or original_units.intersection(day_units)
+                        )
+                    }
+                    if not eligible_events:
+                        continue
+                    # 披露数は「その曲が実際に記録されているキャストライブ」を基準にする。
+                    # DAY をまとめる場合は、DAY2 だけで披露された曲も同じ公演の披露として
+                    # 必ず数えられるよう、ここで DAY を除いた公演キーに統合する。
+                    performed_rows = all_song_rows[
+                        all_song_rows.get("公演区分", pd.Series(dtype=str))
+                        .fillna("")
+                        .astype(str)
+                        .str.contains("キャストライブ", na=False)
+                    ]
+                    performed_event_keys = {
+                        _attendance_event_key(event_name)
+                        for event_name in performed_rows[live_col_name].dropna().astype(str)
+                    }
+                    performed_day_keys = {
+                        make_search_key(str(event_name).strip())
+                        for event_name in performed_rows[live_col_name].dropna().astype(str)
+                    }
+                    # 原曲歌唱者の表記揺れ等で出演判定が漏れても、実際にその曲を披露した
+                    # キャストライブは分母・分子の両方へ含める。これでまとめ表示だけ 0% に
+                    # なることを防ぎ、分子が分母を上回ることもない。
+                    eligible_events.update(performed_event_keys)
+                    eligible_day_events.update(performed_day_keys)
+                    appeared_events = eligible_events.intersection(performed_event_keys)
+                    denominator = len(eligible_events)
+                    threshold_denominator = len(eligible_day_events)
+                    numerator = len(appeared_events)
+                    attendance_rows.append({
+                        rank_target: song_name,
+                        "披露回数": len(song_rows),
+                        "最終披露日_dt": song_rows["日付_dt"].max(),
+                        "対象キャストライブ数": denominator,
+                        "対象DAY数": threshold_denominator,
+                        "キャストライブ披露数": numerator,
+                        "キャストライブ皆勤率": numerator / denominator * 100,
+                    })
+
+                aggregated_rank = pd.DataFrame(attendance_rows)
+                aggregated_rank = aggregated_rank[
+                    aggregated_rank["対象DAY数"] >= int(min_attendance_denominator)
+                ] if not aggregated_rank.empty else aggregated_rank
+                count_col_name = "キャストライブ皆勤率"
+            elif rank_target == "衣装" and costume_count_unit == "公演数（イベント数）" and live_col_name:
                 aggregated_rank = (
                     prep_df.groupby(active_col)
                     .agg(
@@ -3588,11 +3788,19 @@ if os.path.exists(SETLIST_FILE):
                 aggregated_rank = aggregated_rank.sort_values(by=count_col_name, ascending=False)
             elif rank_order == "少ない順":
                 aggregated_rank = aggregated_rank.sort_values(by=count_col_name, ascending=True)
+            elif rank_order == "キャストライブ皆勤率（初披露以降）":
+                aggregated_rank = aggregated_rank.sort_values(
+                    by=["キャストライブ皆勤率", "対象キャストライブ数", "披露回数"],
+                    ascending=[False, False, False],
+                )
             else:
                 aggregated_rank = aggregated_rank.sort_values(by="経過日数_num", ascending=False)
 
-            display_rank = aggregated_rank[[rank_target, count_col_name, "最終披露日", "前回からの経過"]].reset_index(drop=True)
-            rank_value_col = count_col_name if rank_order in {"多い順", "少ない順"} else "経過日数_num"
+            display_columns = [rank_target, count_col_name, "最終披露日", "前回からの経過"]
+            if rank_order == "キャストライブ皆勤率（初披露以降）":
+                display_columns = [rank_target, "キャストライブ皆勤率", "キャストライブ披露数", "対象キャストライブ数", "最終披露日", "前回からの経過"]
+            display_rank = aggregated_rank[display_columns].reset_index(drop=True)
+            rank_value_col = count_col_name if rank_order in {"多い順", "少ない順", "キャストライブ皆勤率（初披露以降）"} else "経過日数_num"
             rank_ascending = rank_order == "少ない順"
             display_rank.insert(
                 0,
@@ -3640,19 +3848,34 @@ if os.path.exists(SETLIST_FILE):
                 unsafe_allow_html=True,
             )
             ranking_rows = []
-            mobile_metric_label = count_col_name if rank_order in {"多い順", "少ない順"} else "前回からの経過"
+            mobile_metric_label = count_col_name if rank_order in {"多い順", "少ない順", "キャストライブ皆勤率（初披露以降）"} else "前回からの経過"
             for _, ranking_row in display_rank.iterrows():
                 rank_number = int(ranking_row["順位"])
                 row_class = f"rank-{rank_number}" if rank_number in {1, 2, 3} else ""
-                mobile_metric = ranking_row[count_col_name] if rank_order in {"多い順", "少ない順"} else ranking_row["前回からの経過"]
+                is_cast_live_rate = rank_order == "キャストライブ皆勤率（初披露以降）"
+                mobile_metric = (
+                    f"{ranking_row['キャストライブ皆勤率']:.1f}%"
+                    if is_cast_live_rate
+                    else ranking_row[count_col_name] if rank_order in {"多い順", "少ない順"} else ranking_row["前回からの経過"]
+                )
+                count_value = (
+                    f"{ranking_row['キャストライブ皆勤率']:.1f}%"
+                    if is_cast_live_rate
+                    else ranking_row[count_col_name]
+                )
+                rate_detail = (
+                    f"（{ranking_row['キャストライブ披露数']} / {ranking_row['対象キャストライブ数']}）"
+                    if is_cast_live_rate else ""
+                )
                 ranking_rows.append(
                     "<tr class='{row_class}'><td class='rank-col'>{rank}</td><td>{name}</td>"
-                    "<td class='count-col'>{count}</td><td class='mobile-metric-col'>{mobile_metric}</td><td class='date-col'>{last_date}</td>"
+                    "<td class='count-col'>{count} {rate_detail}</td><td class='mobile-metric-col'>{mobile_metric}</td><td class='date-col'>{last_date}</td>"
                     "<td class='elapsed-col'>{elapsed}</td></tr>".format(
                         row_class=row_class,
                         rank=rank_number,
                         name=html.escape(str(ranking_row[rank_target])),
-                        count=html.escape(str(ranking_row[count_col_name])),
+                        count=html.escape(str(count_value)),
+                        rate_detail=html.escape(str(rate_detail)),
                         mobile_metric=html.escape(str(mobile_metric)),
                         last_date=html.escape(str(ranking_row["最終披露日"])),
                         elapsed=html.escape(str(ranking_row["前回からの経過"])),
