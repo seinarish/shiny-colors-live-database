@@ -3327,6 +3327,7 @@ if os.path.exists(SETLIST_FILE):
         tab_labels[4],  # 衣装
         tab_labels[8],  # 公演
         tab_labels[9],  # 参加履歴
+        tab_labels[11], # 番組・配信
         "📚 分類ガイド",
         "🔰 使い方",
         "ℹ️ このサイトについて",
