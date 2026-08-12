@@ -8705,17 +8705,45 @@ if os.path.exists(SETLIST_FILE):
                 if not radio_episode_df.empty:
                     selected_radio_detail_df = pd.DataFrame({"出演回": selected_radio_episodes}).merge(
                         radio_episode_df, on="出演回", how="left"
-                    ).sort_values("初回放送_dt", ascending=False)
+                    )
+                    show_radio_archives_only = st.toggle(
+                        "アーカイブがある回だけ表示",
+                        value=False,
+                        key="radio_archives_only",
+                    )
+                    # 文字列順ではなく、放送回の順に並べる。
+                    selected_radio_detail_df["_出演回数_sort"] = pd.to_numeric(
+                        selected_radio_detail_df["出演回"], errors="coerce"
+                    )
+                    selected_radio_detail_df = selected_radio_detail_df.sort_values(
+                        ["_出演回数_sort", "初回放送_dt"],
+                        ascending=[True, True],
+                        kind="stable",
+                    )
                     if not radio_clip_df.empty:
                         selected_radio_detail_df = selected_radio_detail_df.merge(
                             radio_clip_df.rename(columns={"YouTube_URL": "切り抜き動画"}),
                             on="出演回",
                             how="left",
                         )
+                    # 公式ページを優先し、なければ切り抜きへ。表では入口を1つにする。
+                    official_archive = selected_radio_detail_df.get(
+                        "公式配信URL", pd.Series("", index=selected_radio_detail_df.index)
+                    ).astype(str)
+                    clip_archive = selected_radio_detail_df.get(
+                        "切り抜き動画", pd.Series("", index=selected_radio_detail_df.index)
+                    ).astype(str)
+                    selected_radio_detail_df["アーカイブ"] = official_archive.where(
+                        official_archive.str.startswith("http"), clip_archive
+                    )
+                    if show_radio_archives_only:
+                        selected_radio_detail_df = selected_radio_detail_df[
+                            selected_radio_detail_df["アーカイブ"].astype(str).str.startswith("http")
+                        ].copy()
                     radio_detail_columns = [
                         column for column in [
-                            "出演回", "初回放送", "放送内容", "種類", "ユニット回",
-                            "マンスリーMC", "ゲスト", "欠席", "公式配信URL", "切り抜き動画",
+                            "出演回", "初回放送", "放送内容", "アーカイブ", "種類", "ユニット回",
+                            "マンスリーMC", "ゲスト", "欠席",
                         ]
                         if column in selected_radio_detail_df.columns
                     ]
@@ -8725,13 +8753,9 @@ if os.path.exists(SETLIST_FILE):
                         height=280,
                         hide_index=True,
                         column_config={
-                            "切り抜き動画": st.column_config.LinkColumn(
-                                "切り抜き動画",
-                                display_text="YouTubeで見る",
-                            ),
-                            "公式配信URL": st.column_config.LinkColumn(
-                                "公式配信URL",
-                                display_text="公式ページ",
+                            "アーカイブ": st.column_config.LinkColumn(
+                                "アーカイブ",
+                                display_text="▶ 視聴する",
                             ),
                         },
                     )
@@ -8774,6 +8798,20 @@ if os.path.exists(SETLIST_FILE):
                 return title
 
             display_broadcast_df["表示用番組名"] = display_broadcast_df["放送内容"].map(_display_broadcast_title)
+            display_broadcast_df["備考"] = ""
+            # 延期前の告知と延期後の放送を別番組にはせず、放送済みの1件として扱う。
+            summer_special_mask = display_broadcast_df["放送内容"].astype(str).eq(
+                "シャニマス生配信 ～君と過ごしたあの夏スペシャル～"
+            )
+            display_broadcast_df.loc[summer_special_mask, "備考"] = (
+                "当初は2026/07/28(火) 19:00予定。放送延期後、7/30(木) 12:00に放送"
+            )
+            information_letter_mask = display_broadcast_df["放送内容"].astype(str).str.contains(
+                "生配信　インフォメーションレター", na=False
+            ) & display_broadcast_df["初回放送"].astype(str).str.contains("2021/08/25", na=False)
+            display_broadcast_df.loc[information_letter_mask, "備考"] = (
+                "同時刻に予定されていた「ノクチル・サマーメモリーズSP」は中止となり、本配信へ変更"
+            )
 
             broadcast_categories = unique_in_registered_order(display_broadcast_df["分類"].tolist())
             known_broadcast_casts = [
@@ -8804,12 +8842,25 @@ if os.path.exists(SETLIST_FILE):
                 display_broadcast_df = display_broadcast_df[
                     display_broadcast_df["分類"] == selected_broadcast_category
                 ]
+            archive_filter_col, metric_col = st.columns([2, 1])
+            with archive_filter_col:
+                show_broadcast_archives_only = st.toggle(
+                    "アーカイブがある番組だけ表示",
+                    value=False,
+                    key="broadcast_archives_only",
+                )
+            if show_broadcast_archives_only:
+                display_broadcast_df = display_broadcast_df[
+                    display_broadcast_df.get(
+                        "アーカイブ", pd.Series("", index=display_broadcast_df.index)
+                    ).astype(str).str.startswith("http")
+                ]
             with metric_col:
                 st.metric("該当番組数", f"{len(display_broadcast_df):,} 件")
 
             if not display_broadcast_df.empty:
                 shown_columns = [
-                    column for column in ["表示用番組名", "分類", "出演者", "初回放送", "告知サイト", "まとめ"]
+                    column for column in ["表示用番組名", "分類", "出演者", "初回放送", "備考", "アーカイブ", "告知サイト", "まとめ"]
                     if column in display_broadcast_df.columns
                 ]
                 st.dataframe(
@@ -8820,6 +8871,8 @@ if os.path.exists(SETLIST_FILE):
                         "表示用番組名": st.column_config.TextColumn("放送内容", width="large"),
                         "分類": st.column_config.TextColumn("分類", width="medium"),
                         "出演者": st.column_config.TextColumn("出演者", width="large"),
+                        "備考": st.column_config.TextColumn("備考", width="large"),
+                        "アーカイブ": st.column_config.LinkColumn("アーカイブ", display_text="▶ 視聴する"),
                     },
                 )
 
@@ -8831,11 +8884,13 @@ if os.path.exists(SETLIST_FILE):
                 selected_broadcast_row = display_broadcast_df[
                     display_broadcast_df["放送内容"] == selected_broadcast_title
                 ].iloc[0]
-                link_col1, link_col2 = st.columns(2)
+                link_col1, link_col2, link_col3 = st.columns(3)
                 if str(selected_broadcast_row.get("告知サイト", "")).startswith("http"):
                     link_col1.link_button("📢 告知サイトを開く", selected_broadcast_row["告知サイト"])
                 if str(selected_broadcast_row.get("まとめ", "")).startswith("http"):
                     link_col2.link_button("📝 まとめページを開く", selected_broadcast_row["まとめ"])
+                if str(selected_broadcast_row.get("アーカイブ", "")).startswith("http"):
+                    link_col3.link_button("▶️ アーカイブを開く", selected_broadcast_row["アーカイブ"])
 
     # TAB 12: 統合カレンダー
     if selected_tab == tab_labels[12]:
