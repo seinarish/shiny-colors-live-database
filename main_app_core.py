@@ -8750,6 +8750,31 @@ if os.path.exists(SETLIST_FILE):
             if "初回放送_dt" in display_broadcast_df.columns:
                 display_broadcast_df = display_broadcast_df.sort_values("初回放送_dt", ascending=False)
 
+            # 正式名はデータとして保持し、一覧だけ必要に応じて短く表示する。
+            # 「アイドルマスター シャイニーカラーズ生配信」のような長い番組名を
+            # スマホでも読みやすくするための見た目専用の設定。
+            short_broadcast_titles = st.toggle(
+                "番組名を短く表示",
+                value=True,
+                help="例：『アイドルマスター シャイニーカラーズ生配信』を『シャニマス生配信』と表示します。データやリンク先は変わりません。",
+                key="broadcast_short_title_toggle",
+            )
+
+            def _display_broadcast_title(title):
+                title = str(title)
+                if not short_broadcast_titles:
+                    return title
+                replacements = (
+                    ("アイドルマスター シャイニーカラーズ", "シャニマス"),
+                    ("THE IDOLM@STER SHINY COLORS", "シャニマス"),
+                    ("アイドルマスターシャイニーカラーズ", "シャニマス"),
+                )
+                for source, replacement in replacements:
+                    title = title.replace(source, replacement)
+                return title
+
+            display_broadcast_df["表示用番組名"] = display_broadcast_df["放送内容"].map(_display_broadcast_title)
+
             broadcast_categories = unique_in_registered_order(display_broadcast_df["分類"].tolist())
             known_broadcast_casts = [
                 cast_name for cast_name in cast_list
@@ -8784,7 +8809,7 @@ if os.path.exists(SETLIST_FILE):
 
             if not display_broadcast_df.empty:
                 shown_columns = [
-                    column for column in ["放送内容", "分類", "出演者", "初回放送", "告知サイト", "まとめ"]
+                    column for column in ["表示用番組名", "分類", "出演者", "初回放送", "告知サイト", "まとめ"]
                     if column in display_broadcast_df.columns
                 ]
                 st.dataframe(
@@ -8792,7 +8817,7 @@ if os.path.exists(SETLIST_FILE):
                     use_container_width=True,
                     height=520,
                     column_config={
-                        "放送内容": st.column_config.TextColumn("放送内容", width="large"),
+                        "表示用番組名": st.column_config.TextColumn("放送内容", width="large"),
                         "分類": st.column_config.TextColumn("分類", width="medium"),
                         "出演者": st.column_config.TextColumn("出演者", width="large"),
                     },
