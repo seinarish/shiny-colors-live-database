@@ -1984,7 +1984,12 @@ def get_base_song_name(song_name, include_versions=True, include_no_vocal=False)
         return song_name.strip()
 
     target = song_name
-    version_pattern = r"\s*[\(（\[][^\)）\]]*(short|ver|version|size|mix|edit|tv|anime|come and unite)[^\)）\]]*[\)）\]]"
+    version_pattern = (
+        r"\s*[\(（\[]\s*"
+        r"(?:short(?:\s*ver(?:sion)?\.?)?|(?:\S*メドレー\s*)?ver(?:sion)?\.?|"
+        r"size|mix|edit|tv|anime|come and unite)\s*"
+        r"[\)）\]]"
+    )
     novocal_pattern = r"\s*[\(（\[][^\)）\]]*(歌唱無|歌唱なし|off vocal|instrumental|inst)[^\)）\]]*[\)）\]]"
 
     prev = None
@@ -2004,7 +2009,8 @@ def get_base_song_name(song_name, include_versions=True, include_no_vocal=False)
         )
 
     target = re.sub(r"\s+", " ", target)
-    return target.strip(" -_（(）)")
+    # 正式タイトルの括弧・横棒は曲名の一部になり得るので残す。
+    return target.strip()
 
 
 @lru_cache(maxsize=32768)
@@ -2014,8 +2020,9 @@ def get_catalog_song_key(song_name):
     # リミックスは通常版と別曲として扱う。
     if re.search(r"\bremix\b", song_name, flags=re.IGNORECASE):
         return make_search_key(song_name)
-    song_name = re.sub(r"\s*[\(（\[][^\)）\]]*[\)）\]]", "", song_name)
-    return make_search_key(song_name)
+    # `(short)` と `Migratory Echoes（メドレーver.）` は通常版へ統合する。
+    # 正式タイトル中の括弧・横棒は削除しない。
+    return make_search_key(get_base_song_name(song_name, include_versions=True))
 
 
 def migratory_echoes_songs_for_album(album_name, all_songs):
@@ -3149,9 +3156,9 @@ if os.path.exists(SETLIST_FILE):
                     return cat_map[key]
 
                 raw_name = str(raw_name)
-                stripped_name = re.sub(r"[\(（\[].*?[\)）\]]", "", raw_name)
-                stripped_name = re.sub(r"[-–—].*?$", "", stripped_name).strip()
-                stripped_key = make_search_key(stripped_name)
+                # `(short)` 等の明示的な版表記だけを通常版に寄せる。
+                # 正式タイトルの括弧・副題はここで削らない。
+                stripped_key = make_search_key(get_base_song_name(raw_name, include_versions=True))
                 if stripped_key in cat_map:
                     return cat_map[stripped_key]
 
