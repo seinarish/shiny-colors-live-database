@@ -4335,19 +4335,24 @@ if os.path.exists(SETLIST_FILE):
             selected_song = st.selectbox("3. 分析する楽曲を選択:", final_song_list, key="tab2_sel_song")
 
         if selected_song:
-            # 表記ゆれ（中黒・空白・記号の違い）があっても、同じ楽曲の披露記録を拾う。
+            # 表記ゆれ（中黒・空白・記号の違い）に加え、
+            # 「文明開花輪舞 -シティ・ハレルヤ-」のように集計時に副題を外す曲も拾う。
             selected_song_key = make_search_key(selected_song)
-            song_df = analysis_base_df[
-                analysis_base_df["集計用楽曲名"].map(make_search_key).eq(selected_song_key)
-            ].copy()
+
+            def selected_song_mask(source_df):
+                match_mask = pd.Series(False, index=source_df.index)
+                for song_column in ("集計用楽曲名", "楽曲名", "原曲名"):
+                    if song_column in source_df.columns:
+                        match_mask |= source_df[song_column].map(make_search_key).eq(selected_song_key)
+                return match_mask
+
+            song_df = analysis_base_df[selected_song_mask(analysis_base_df)].copy()
             # 楽曲の候補は表示されているのに、サイドバーの絞り込みの組み合わせで
             # 履歴だけ0件になって「未披露」と表示されることがある。
             # その場合は全履歴を確認して、実際に披露済みなら履歴を優先する。
             song_history_fallback = False
             if song_df.empty:
-                all_song_df = full_analysis_df[
-                    full_analysis_df["集計用楽曲名"].map(make_search_key).eq(selected_song_key)
-                ].copy()
+                all_song_df = full_analysis_df[selected_song_mask(full_analysis_df)].copy()
                 if not all_song_df.empty:
                     song_df = all_song_df
                     song_history_fallback = True
