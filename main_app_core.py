@@ -25,8 +25,10 @@ if not PUBLIC_MODE:
     import importlib
     from PIL import Image, ImageDraw, ImageFont
     import event_image_gallery
+    import public_data_publish
 
     event_image_gallery = importlib.reload(event_image_gallery)
+    public_data_publish = importlib.reload(public_data_publish)
     from event_image_gallery import (
         render_calendar_context_images,
         render_costume_context_images,
@@ -37,6 +39,7 @@ if not PUBLIC_MODE:
     from public_data_publish import (
         PublicPublishError,
         discard_prepared_public_data,
+        get_public_data_sync_details,
         get_public_data_sync_summary,
         prepare_public_data_sync,
         publish_prepared_public_data,
@@ -2267,6 +2270,22 @@ def find_event_social_links(event_name, social_links_df):
     return links
 
 
+def render_x_post_embed(post_url):
+    """Render one known public X post locally, with X's official embed script."""
+    url = str(post_url).strip()
+    if not re.fullmatch(r"https?://(?:x|twitter)\.com/[^/]+/status/\d+(?:/video/\d+)?(?:\?.*)?", url):
+        st.link_button("Xで開く", url)
+        return
+    safe_url = html.escape(url, quote=True)
+    components.html(
+        f'''<blockquote class="twitter-tweet" data-dnt="true"><a href="{safe_url}"></a></blockquote>
+        <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>''',
+        height=620,
+        scrolling=True,
+    )
+    st.link_button("Xで開く", url)
+
+
 def render_analysis_chart(fig, key=None, height=None):
     """Render a chart with Plotly's built-in PNG export button enabled."""
     if height:
@@ -2739,25 +2758,39 @@ if os.path.exists(SETLIST_FILE):
         raw_radio_df = load_csv(RADIO_APPEARANCE_FILE).fillna("")
         if {"キャスト", "出演回"}.issubset(raw_radio_df.columns):
             for radio_row in raw_radio_df[["キャスト", "出演回"]].to_dict("records"):
-                radio_cast = radio_cast_aliases.get(
-                    clean_text(str(radio_row["キャスト"])), clean_text(str(radio_row["キャスト"]))
-                )
+                raw_radio_cast = clean_text(str(radio_row["キャスト"]))
                 episode_text = normalize_radio_episode(radio_row["出演回"])
-                if radio_cast and episode_text and episode_text != "nan":
-                    radio_rows.append({"キャスト": radio_cast, "出演回": episode_text})
+                # 過去データには「成海瑠奈;希水しお」のように、交代前後の
+                # キャストを同じセルへ併記した行がある。ここでは別々の出演者として扱う。
+                radio_casts = [
+                    radio_cast_aliases.get(name, name)
+                    for name in re.split(r"[;；]", raw_radio_cast)
+                    if name.strip()
+                ]
+                if episode_text and episode_text != "nan":
+                    radio_rows.extend(
+                        {"キャスト": radio_cast, "出演回": episode_text}
+                        for radio_cast in radio_casts
+                    )
         else:
             # 旧来の横持ち形式（キャストごとの回番号一覧）を読み込む。
             for radio_row in raw_radio_df.to_dict("records"):
                 radio_values = list(radio_row.values())
                 if len(radio_values) < 2:
                     continue
-                radio_cast = radio_cast_aliases.get(
-                    clean_text(str(radio_values[1])), clean_text(str(radio_values[1]))
-                )
+                raw_radio_cast = clean_text(str(radio_values[1]))
+                radio_casts = [
+                    radio_cast_aliases.get(name, name)
+                    for name in re.split(r"[;；]", raw_radio_cast)
+                    if name.strip()
+                ]
                 for episode_value in radio_values[2:]:
                     episode_text = normalize_radio_episode(episode_value)
-                    if radio_cast and episode_text and episode_text != "nan":
-                        radio_rows.append({"キャスト": radio_cast, "出演回": episode_text})
+                    if episode_text and episode_text != "nan":
+                        radio_rows.extend(
+                            {"キャスト": radio_cast, "出演回": episode_text}
+                            for radio_cast in radio_casts
+                        )
     radio_appearance_df = pd.DataFrame(radio_rows).drop_duplicates()
 
     radio_episode_rows = []
@@ -3264,6 +3297,12 @@ if os.path.exists(SETLIST_FILE):
     else:
         df["アルバム登録済"] = True
 
+    # 体操など、セットリストには残すが通常の楽曲集計には含めない記録。
+    special_performance_names = {"283体操", "シャイニーエクササイズ"}
+    df["記録種別"] = df["楽曲名"].astype(str).str.replace("(short)", "", regex=False).str.strip().map(
+        lambda song_name: "企画パフォーマンス" if song_name in special_performance_names else "楽曲"
+    )
+
     # バックアップ・出力
     st.sidebar.markdown("---")
     st.sidebar.subheader("📥 バックアップ・出力")
@@ -3317,6 +3356,7 @@ if os.path.exists(SETLIST_FILE):
     # 配信を見ながら使う下書きは、公開版には載せないローカル専用ページにする。
     if not PUBLIC_MODE:
         tab_labels.append("📝 ライブ中メモ")
+        tab_labels.append("🔗 関係性")
 
     # 公開版は閲覧・分析に必要な入口だけに絞る。編集、下書き、画像管理などは
     # ローカル管理版専用のまま残す。
@@ -3453,7 +3493,7 @@ if os.path.exists(SETLIST_FILE):
 
         if not youtube_unit_pv_df.empty:
             st.markdown("---")
-            st.subheader("🎬 ユニット・企画PV")
+            st.subheader("🎬 ユニット・アイドル・企画PV")
             home_pv_col1, home_pv_col2 = st.columns([1, 1.45])
             with home_pv_col1:
                 selected_pv_target = st.selectbox(
@@ -3513,7 +3553,7 @@ if os.path.exists(SETLIST_FILE):
             "ランキング＆比率分析",
             "披露回数・衣装・ユニットの傾向を、同じ条件のまま比較できます。",
         )
-        ranking_df = df[df["アルバム登録済"]].copy()
+        ranking_df = df[(df["アルバム登録済"]) & (df["記録種別"] == "楽曲")].copy()
 
         if exclude_talk_events:
             ranking_df = ranking_df[~ranking_df["楽曲名"].astype(str).str.contains("トークのみ", na=False)]
@@ -3893,7 +3933,11 @@ if os.path.exists(SETLIST_FILE):
             ranking_highlights = [
                 (
                     f"{row['順位']}位　{row[rank_target]}",
-                    f"{count_col_name} {row[count_col_name]}／前回披露 {row['前回からの経過']}",
+                    (
+                        f"皆勤率 {row['キャストライブ皆勤率']:.1f}%（{row['キャストライブ披露数']} / {row['対象キャストライブ数']}）／前回披露 {row['前回からの経過']}"
+                        if rank_order == "キャストライブ皆勤率（初披露以降）"
+                        else f"{count_col_name} {row[count_col_name]}／前回披露 {row['前回からの経過']}"
+                    ),
                 )
                 for _, row in display_rank.head(8).iterrows()
             ]
@@ -4194,6 +4238,8 @@ if os.path.exists(SETLIST_FILE):
                     filtered_alb_df = filtered_alb_df[filtered_alb_df[series_col] == sel_series]
                 album_list += unique_in_registered_order(filtered_alb_df[alb_col].tolist())
             if (
+                sel_series == "すべて"
+                and
                 not song_album_df.empty
                 and song_alb_col
                 and "アルバム未収録" in song_album_df[song_alb_col].astype(str).tolist()
@@ -4289,7 +4335,22 @@ if os.path.exists(SETLIST_FILE):
             selected_song = st.selectbox("3. 分析する楽曲を選択:", final_song_list, key="tab2_sel_song")
 
         if selected_song:
-            song_df = analysis_base_df[analysis_base_df["集計用楽曲名"] == selected_song].copy()
+            # 表記ゆれ（中黒・空白・記号の違い）があっても、同じ楽曲の披露記録を拾う。
+            selected_song_key = make_search_key(selected_song)
+            song_df = analysis_base_df[
+                analysis_base_df["集計用楽曲名"].map(make_search_key).eq(selected_song_key)
+            ].copy()
+            # 楽曲の候補は表示されているのに、サイドバーの絞り込みの組み合わせで
+            # 履歴だけ0件になって「未披露」と表示されることがある。
+            # その場合は全履歴を確認して、実際に披露済みなら履歴を優先する。
+            song_history_fallback = False
+            if song_df.empty:
+                all_song_df = full_analysis_df[
+                    full_analysis_df["集計用楽曲名"].map(make_search_key).eq(selected_song_key)
+                ].copy()
+                if not all_song_df.empty:
+                    song_df = all_song_df
+                    song_history_fallback = True
             if "日付_dt" in song_df.columns:
                 song_df = song_df.sort_values(by="日付_dt", ascending=False)
 
@@ -4580,7 +4641,7 @@ if os.path.exists(SETLIST_FILE):
                 person_options = idol_list
             else:
                 raw_singers = []
-                for val in df[singer_col].dropna():
+                for val in df.loc[df["記録種別"] == "楽曲", singer_col].dropna():
                     for s in re.split(r"[;；]", str(val)):
                         if s.strip(): raw_singers.append(s.strip())
                 person_options = unique_in_registered_order(raw_singers)
@@ -4597,7 +4658,10 @@ if os.path.exists(SETLIST_FILE):
                         if sub_c.strip(): search_keywords.append(sub_c.strip())
 
             pattern = "|".join([re.escape(k) for k in set(search_keywords)])
-            singer_df = df[df[singer_col].astype(str).str.contains(pattern, na=False, regex=True)].copy()
+            singer_df = df[
+                (df["記録種別"] == "楽曲")
+                & df[singer_col].astype(str).str.contains(pattern, na=False, regex=True)
+            ].copy()
 
             with col_song:
                 if exclude_talk_events:
@@ -4882,7 +4946,7 @@ if os.path.exists(SETLIST_FILE):
 
         if costume_col:
             raw_costumes = []
-            for val in df[costume_col].dropna():
+            for val in df.loc[df["記録種別"] == "楽曲", costume_col].dropna():
                 for c in re.split(r"[;；]", str(val)):
                     if c.strip(): raw_costumes.append(c.strip())
 
@@ -4941,7 +5005,10 @@ if os.path.exists(SETLIST_FILE):
 
                 if selected_costume:
                     escaped_c_name = re.escape(selected_costume)
-                    c_df = df[df[costume_col].astype(str).str.contains(escaped_c_name, na=False, regex=True)].copy()
+                    c_df = df[
+                        (df["記録種別"] == "楽曲")
+                        & df[costume_col].astype(str).str.contains(escaped_c_name, na=False, regex=True)
+                    ].copy()
 
                     if "日付_dt" in c_df.columns:
                         c_df = c_df.sort_values(by="日付_dt", ascending=False)
@@ -6737,7 +6804,7 @@ if os.path.exists(SETLIST_FILE):
                             "XR無料配信": (YOUTUBE_XR_INTRO_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"]),
                             "公演公式サイト": (EVENT_OFFICIAL_SITE_FILE, ["対象公演", "公式サイトURL"]),
                             "公演SNSリンク": (EVENT_SOCIAL_LINKS_FILE, ["対象公演", "種別", "URL"]),
-                            "ユニット・企画PV": (YOUTUBE_UNIT_PV_FILE, ["対象", "区分", "YouTube_URL"]),
+                            "ユニット・アイドル・企画PV": (YOUTUBE_UNIT_PV_FILE, ["対象", "区分", "YouTube_URL"]),
                             "シャニラジ切り抜き": (YOUTUBE_RADIO_CLIP_FILE, ["出演回", "YouTube_URL"]),
                             "周年PV・記念動画": (YOUTUBE_ANNIVERSARY_PV_FILE, ["周年", "種別", "YouTube_URL"]),
                         }
@@ -6790,7 +6857,7 @@ if os.path.exists(SETLIST_FILE):
                 "XR無料配信": (YOUTUBE_XR_INTRO_FILE, ["対象公演", "種別", "YouTube_URL", "確認状態"], "対象公演"),
                 "公演公式サイト": (EVENT_OFFICIAL_SITE_FILE, ["対象公演", "公式サイトURL"], "対象公演"),
                 "公演SNSリンク": (EVENT_SOCIAL_LINKS_FILE, ["対象公演", "種別", "URL"], "対象公演"),
-                "ユニット・企画PV": (YOUTUBE_UNIT_PV_FILE, ["対象", "区分", "YouTube_URL"], "対象"),
+                "ユニット・アイドル・企画PV": (YOUTUBE_UNIT_PV_FILE, ["対象", "区分", "YouTube_URL"], "対象"),
                 "シャニラジ切り抜き": (YOUTUBE_RADIO_CLIP_FILE, ["出演回", "YouTube_URL"], "出演回"),
                 "周年PV・記念動画": (YOUTUBE_ANNIVERSARY_PV_FILE, ["周年", "種別", "YouTube_URL"], "周年"),
             }
@@ -6804,7 +6871,7 @@ if os.path.exists(SETLIST_FILE):
                     entry_album = st.text_input("対象アルバム（アルバム試聴・Migratory Echoes用）")
                     entry_event = st.text_input("対象公演（ライブ映像・公演リンクの場合）")
                 with entry_col2:
-                    entry_target = st.text_input("対象（ユニット・企画PV用）")
+                    entry_target = st.text_input("対象（ユニット・アイドル・企画PV用）")
                     entry_episode = st.text_input("出演回（シャニラジ切り抜き用）")
                     entry_anniversary = st.text_input("周年（周年PV用）", placeholder="例：7周年")
                     entry_type = st.text_input("種別", placeholder="例：MV、公式ライブ映像、公式サイト")
@@ -6904,6 +6971,7 @@ if os.path.exists(SETLIST_FILE):
                             pending_files = prepare_public_data_sync()
                             st.session_state["public_sync_files"] = pending_files
                             st.session_state["public_sync_summary"] = get_public_data_sync_summary(pending_files)
+                            st.session_state["public_sync_details"] = get_public_data_sync_details(pending_files)
                             st.session_state["public_sync_selected_files"] = pending_files
                     except PublicPublishError as exc:
                         st.error(f"確認できませんでした：{exc}")
@@ -6913,7 +6981,9 @@ if os.path.exists(SETLIST_FILE):
                         discard_prepared_public_data()
                         st.session_state["public_sync_files"] = []
                         st.session_state["public_sync_summary"] = []
-                        st.session_state["public_sync_selected_files"] = []
+                        st.session_state["public_sync_details"] = {}
+                        # この時点では選択欄がすでに表示済みのため、値を直接
+                        # 書き換えない。次回の「確認」で安全に初期化される。
                         st.success("確認用の変更を取り消しました。")
                     except PublicPublishError as exc:
                         st.error(f"取り消せませんでした：{exc}")
@@ -6926,6 +6996,24 @@ if os.path.exists(SETLIST_FILE):
                     use_container_width=True,
                     hide_index=True,
                 )
+                sync_details = st.session_state.get("public_sync_details", {})
+                st.markdown("#### 差分の内容")
+                st.caption("変更された行は、公開版の古い行とローカルの新しい行を並べて確認できます。")
+                for file_name in public_sync_files:
+                    file_details = sync_details.get(file_name, {})
+                    added_or_changed = file_details.get("ローカルで追加・変更される行", [])
+                    removed = file_details.get("公開版からなくなる行", [])
+                    with st.expander(
+                        f"{file_name}（ローカル側 {len(added_or_changed)}行 ／ 公開版から削除 {len(removed)}行）"
+                    ):
+                        if added_or_changed:
+                            st.caption("ローカル側の追加・変更行")
+                            st.dataframe(pd.DataFrame(added_or_changed), use_container_width=True, hide_index=True)
+                        if removed:
+                            st.caption("公開版からなくなる行")
+                            st.dataframe(pd.DataFrame(removed), use_container_width=True, hide_index=True)
+                        if not added_or_changed and not removed:
+                            st.caption("行単位の違いはありません。列名・並び順だけが変わっています。")
                 selected_public_sync_files = st.multiselect(
                     "公開するデータを選択",
                     public_sync_files,
@@ -6942,7 +7030,9 @@ if os.path.exists(SETLIST_FILE):
                             st.caption("反映したファイル：" + "、".join(published_files))
                         st.session_state["public_sync_files"] = []
                         st.session_state["public_sync_summary"] = []
-                        st.session_state["public_sync_selected_files"] = []
+                        st.session_state["public_sync_details"] = {}
+                        # 選択欄の値はこの実行中には変更できないため、そのままにする。
+                        # 次に①で確認し直す際に、新しい候補で初期化される。
                     except PublicPublishError as exc:
                         st.error(f"公開できませんでした：{exc}")
             else:
@@ -6975,7 +7065,7 @@ if os.path.exists(SETLIST_FILE):
                 "🎵 音源バージョン別リンク": YOUTUBE_AUDIO_VARIANTS_FILE,
                 "🎵 Migratory Echoes・収録盤別音源": MIGRATORY_ECHOES_MEDIA_FILE,
                 "🎬 MVリンク": YOUTUBE_VIDEO_VARIANTS_FILE,
-                "🎬 ユニット・企画PVリンク": YOUTUBE_UNIT_PV_FILE,
+                "🎬 ユニット・アイドル・企画PVリンク": YOUTUBE_UNIT_PV_FILE,
                 "📻 シャニラジ切り抜きリンク": YOUTUBE_RADIO_CLIP_FILE,
                 "📡 公演AP生配信リンク": YOUTUBE_LIVE_AP_STREAM_FILE,
                 "🎉 周年PVリンク": YOUTUBE_ANNIVERSARY_PV_FILE,
@@ -7791,15 +7881,26 @@ if os.path.exists(SETLIST_FILE):
                     if pd.notna(selected_event_date) else "日付不明"
                 )
                 selected_event_category = str(event_setlist_df["公演区分"].iloc[0])
-                st.markdown(
-                    "<div class='analysis-target-card'>"
-                    "<div class='analysis-target-label'>🎯 分析対象の公演</div>"
-                    f"<div class='analysis-target-title'>{html.escape(str(selected_event))}</div>"
-                    f"<div class='analysis-target-meta'>{html.escape(selected_event_date_label)}"
-                    f"　｜　{html.escape(selected_event_category)}　｜　{len(event_setlist_df)}曲</div>"
-                    "</div>",
-                    unsafe_allow_html=True,
-                )
+                event_logo_path = find_event_logo_path(str(selected_event))
+                logo_column, detail_column = st.columns([1, 5], vertical_alignment="center")
+                with logo_column:
+                    if event_logo_path:
+                        try:
+                            # OneDrive のオンデマンド素材でも安定して表示できるよう、
+                            # パスではなく読み込んだ画像データを渡す。
+                            st.image(Path(event_logo_path).read_bytes(), width=130)
+                        except OSError:
+                            pass
+                with detail_column:
+                    st.markdown(
+                        "<div class='analysis-target-card'>"
+                        "<div class='analysis-target-label'>🎯 分析対象の公演</div>"
+                        f"<div class='analysis-target-title'>{html.escape(str(selected_event))}</div>"
+                        f"<div class='analysis-target-meta'>{html.escape(selected_event_date_label)}"
+                        f"　｜　{html.escape(selected_event_category)}　｜　{len(event_setlist_df)}曲</div>"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
 
                 render_event_context_images(str(selected_event))
 
@@ -7945,6 +8046,18 @@ if os.path.exists(SETLIST_FILE):
                             social_link["URL"],
                             use_container_width=True,
                         )
+                    if not PUBLIC_MODE:
+                        x_video_links = [
+                            link for link in event_social_links
+                            if "動画" in str(link["種別"])
+                        ]
+                        if x_video_links and st.checkbox(
+                            "X動画を表示（ローカル確認用）",
+                            key=f"tab8_show_x_video_{make_search_key(selected_event)}",
+                        ):
+                            x_video = x_video_links[0]
+                            st.caption(str(x_video["種別"]))
+                            render_x_post_embed(x_video["URL"])
 
                 event_media_options = build_event_media_options(
                     selected_event,
@@ -8668,6 +8781,138 @@ if os.path.exists(SETLIST_FILE):
                         },
                     )
 
+    # ローカル専用: キャスト同士の関係性
+    if not PUBLIC_MODE and selected_tab == "🔗 関係性":
+        render_page_header(
+            "🔗",
+            "キャストの関係性",
+            "同じ公演での出演、番組での共演、ユニットや企画チームのつながりを確認できます。",
+        )
+
+        relation_casts = unique_in_registered_order(cast_list)
+        if len(relation_casts) < 2:
+            st.info("アイドル・キャストの登録後に、ここで関係性を確認できます。")
+        else:
+            relation_col1, relation_col2 = st.columns(2)
+            with relation_col1:
+                relation_first_cast = st.selectbox(
+                    "1人目のキャスト",
+                    relation_casts,
+                    key="relationship_first_cast",
+                )
+            with relation_col2:
+                relation_second_cast = st.selectbox(
+                    "2人目のキャスト",
+                    [name for name in relation_casts if name != relation_first_cast],
+                    key="relationship_second_cast",
+                )
+
+            first_groups = set(idol_to_groups_map.get(relation_first_cast, set()))
+            second_groups = set(idol_to_groups_map.get(relation_second_cast, set()))
+            shared_groups = sorted(first_groups & second_groups)
+            group_categories = {}
+            for category_name, member_map in group_member_map_by_column.items():
+                for group_name in member_map.values():
+                    if group_name and group_name != "nan":
+                        group_categories.setdefault(str(group_name), []).append(category_name)
+
+            # 参加扱いの行だけを使い、欠席・出演予定なしは「同じ公演」に含めない。
+            shared_event_rows = pd.DataFrame()
+            if not attendance_df.empty and {"公演名", "日程", "キャスト", "参加状況"}.issubset(attendance_df.columns):
+                relation_attendance = attendance_df.copy().fillna("")
+                relation_attendance = relation_attendance[
+                    relation_attendance["参加状況"].isin(["参加", "一部楽曲参加", "サプライズ披露"])
+                ].copy()
+                first_event_keys = set(
+                    relation_attendance.loc[
+                        relation_attendance["キャスト"].astype(str) == relation_first_cast,
+                        "公演名",
+                    ].astype(str)
+                )
+                second_event_keys = set(
+                    relation_attendance.loc[
+                        relation_attendance["キャスト"].astype(str) == relation_second_cast,
+                        "公演名",
+                    ].astype(str)
+                )
+                shared_event_names = first_event_keys & second_event_keys
+                if shared_event_names:
+                    relation_event_dates = relation_attendance[
+                        relation_attendance["公演名"].astype(str).isin(shared_event_names)
+                    ][["公演名", "日程"]].drop_duplicates().copy()
+                    relation_event_dates["公演名"] = relation_event_dates["公演名"].map(clean_live_name)
+                    relation_event_dates["日程"] = relation_event_dates["日程"].astype(str)
+                    shared_event_rows = relation_event_dates.sort_values(["公演名", "日程"], kind="stable")
+
+            # 番組・配信／シャニラジ／オーディオコメンタリーでの共演数。
+            radio_joint_count = 0
+            if not radio_appearance_df.empty and {"出演回", "キャスト"}.issubset(radio_appearance_df.columns):
+                radio_casts_by_episode = radio_appearance_df.groupby("出演回")["キャスト"].agg(
+                    lambda values: set(values.dropna().astype(str))
+                )
+                radio_joint_count = sum(
+                    relation_first_cast in members and relation_second_cast in members
+                    for members in radio_casts_by_episode
+                )
+            broadcast_joint_count = 0
+            if not broadcast_df.empty and "出演者" in broadcast_df.columns:
+                broadcast_joint_count = int((
+                    broadcast_df["出演者"].astype(str).str.contains(re.escape(relation_first_cast), na=False)
+                    & broadcast_df["出演者"].astype(str).str.contains(re.escape(relation_second_cast), na=False)
+                ).sum())
+            commentary_joint_count = 0
+            if not commentary_df.empty and {"キャスト", "公演略称", "種別"}.issubset(commentary_df.columns):
+                commentary_casts_by_title = commentary_df.groupby(["種別", "公演略称"])["キャスト"].agg(
+                    lambda values: set(values.dropna().astype(str))
+                )
+                commentary_joint_count = sum(
+                    relation_first_cast in members and relation_second_cast in members
+                    for members in commentary_casts_by_title
+                )
+
+            metric_col1, metric_col2, metric_col3 = st.columns(3)
+            metric_col1.metric("同じ枠組み", f"{len(shared_groups)} 件")
+            metric_col2.metric("同じ公演に参加", f"{shared_event_rows['公演名'].nunique() if not shared_event_rows.empty else 0} 公演")
+            metric_col3.metric(
+                "番組などで共演",
+                f"{radio_joint_count + broadcast_joint_count + commentary_joint_count} 回",
+            )
+
+            st.subheader("🧩 共通するユニット・枠組み")
+            if shared_groups:
+                for group_name in shared_groups:
+                    category_label = "・".join(unique_in_registered_order(group_categories.get(group_name, [])))
+                    group_members = group_to_casts_map.get(group_name, [])
+                    caption = f"{category_label}：" if category_label else ""
+                    st.markdown(
+                        f"**{caption}{group_name}**  \\n"
+                        f"メンバー：{'、'.join(group_members)}"
+                    )
+            else:
+                st.caption("登録済みのユニット・企画チームで共通する枠組みはありません。")
+
+            st.subheader("🏟️ 一緒に参加した公演")
+            if shared_event_rows.empty:
+                st.caption("参加扱いの登録が同じ公演にそろうと、ここに表示されます。")
+            else:
+                st.dataframe(
+                    shared_event_rows,
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(420, 80 + len(shared_event_rows) * 36),
+                    column_config={
+                        "公演名": st.column_config.TextColumn("公演名", width="large"),
+                    },
+                )
+
+            st.subheader("📺 番組・配信での共演")
+            program_rows = pd.DataFrame([
+                {"種類": "シャニラジ", "共演回数": radio_joint_count},
+                {"種類": "公式番組・生配信", "共演回数": broadcast_joint_count},
+                {"種類": "オーディオコメンタリー", "共演回数": commentary_joint_count},
+            ])
+            st.dataframe(program_rows, use_container_width=True, hide_index=True)
+
     # TAB 11: 公式番組・生配信履歴
     if selected_tab == tab_labels[11]:
         render_page_header(
@@ -8675,8 +8920,150 @@ if os.path.exists(SETLIST_FILE):
             "番組・配信履歴",
             "公式番組、配信、シャニラジの出演履歴をまとめて確認できます。",
         )
+
+        st.subheader("🤝 キャストの共演回数")
+        st.caption("シャニラジ・公式番組／生配信・オーディオコメンタリーで、2人が同じ回に出演した回数を確認できます。")
+
+        known_program_casts = []
+        if not radio_appearance_df.empty and "キャスト" in radio_appearance_df.columns:
+            known_program_casts.extend(radio_appearance_df["キャスト"].dropna().astype(str).tolist())
+        if not broadcast_df.empty and "出演者" in broadcast_df.columns:
+            broadcast_cast_text = "\n".join(broadcast_df["出演者"].dropna().astype(str).tolist())
+            known_program_casts.extend([
+                cast_name for cast_name in cast_list
+                if cast_name in broadcast_cast_text
+            ])
+        if not commentary_df.empty and "キャスト" in commentary_df.columns:
+            known_program_casts.extend(commentary_df["キャスト"].dropna().astype(str).tolist())
+        known_program_casts = unique_in_registered_order([
+            cast_name for cast_name in cast_list if cast_name in set(known_program_casts)
+        ] + [
+            cast_name for cast_name in known_program_casts if cast_name not in cast_list
+        ])
+
+        if len(known_program_casts) >= 2:
+            pair_col1, pair_col2 = st.columns(2)
+            with pair_col1:
+                first_pair_cast = st.selectbox(
+                    "1人目",
+                    known_program_casts,
+                    key="program_pair_first_cast",
+                )
+            with pair_col2:
+                second_pair_options = [
+                    cast_name for cast_name in known_program_casts
+                    if cast_name != first_pair_cast
+                ]
+                second_pair_cast = st.selectbox(
+                    "2人目",
+                    second_pair_options,
+                    key="program_pair_second_cast",
+                )
+
+            radio_pair_episodes = []
+            if not radio_appearance_df.empty and {"出演回", "キャスト"}.issubset(radio_appearance_df.columns):
+                appearances_by_episode = radio_appearance_df.groupby("出演回")["キャスト"].agg(
+                    lambda values: set(values.dropna().astype(str))
+                )
+                radio_pair_episodes = [
+                    episode for episode, casts in appearances_by_episode.items()
+                    if first_pair_cast in casts and second_pair_cast in casts
+                ]
+
+            broadcast_pair_df = pd.DataFrame()
+            if not broadcast_df.empty and "出演者" in broadcast_df.columns:
+                first_pattern = re.escape(first_pair_cast)
+                second_pattern = re.escape(second_pair_cast)
+                broadcast_pair_df = broadcast_df[
+                    broadcast_df["出演者"].astype(str).str.contains(first_pattern, na=False)
+                    & broadcast_df["出演者"].astype(str).str.contains(second_pattern, na=False)
+                ].copy()
+                if "初回放送_dt" in broadcast_pair_df.columns:
+                    broadcast_pair_df = broadcast_pair_df.sort_values("初回放送_dt", ascending=False)
+
+            commentary_pair_df = pd.DataFrame()
+            if not commentary_df.empty and {"キャスト", "公演略称", "種別"}.issubset(commentary_df.columns):
+                commentary_pair_keys = commentary_df.groupby(["種別", "公演略称"])["キャスト"].agg(
+                    lambda values: set(values.dropna().astype(str))
+                )
+                matching_commentary_keys = [
+                    key for key, casts in commentary_pair_keys.items()
+                    if first_pair_cast in casts and second_pair_cast in casts
+                ]
+                if matching_commentary_keys:
+                    commentary_pair_df = pd.DataFrame(
+                        matching_commentary_keys, columns=["種別", "公演略称"]
+                    )
+
+            pair_metric_col1, pair_metric_col2, pair_metric_col3, pair_metric_col4 = st.columns(4)
+            pair_metric_col1.metric(
+                "合計",
+                f"{len(radio_pair_episodes) + len(broadcast_pair_df) + len(commentary_pair_df)} 回",
+            )
+            pair_metric_col2.metric("シャニラジ", f"{len(radio_pair_episodes)} 回")
+            pair_metric_col3.metric("公式番組・生配信", f"{len(broadcast_pair_df)} 回")
+            pair_metric_col4.metric("オーディオコメンタリー", f"{len(commentary_pair_df)} 回")
+
+            pair_detail_rows = []
+            if radio_pair_episodes:
+                if not radio_episode_df.empty:
+                    pair_radio_detail = pd.DataFrame({"出演回": radio_pair_episodes}).merge(
+                        radio_episode_df, on="出演回", how="left"
+                    )
+                    for _, row in pair_radio_detail.iterrows():
+                        pair_detail_rows.append({
+                            "種類": "シャニラジ",
+                            "日時": row.get("初回放送", ""),
+                            "番組・回": f'第{row.get("出演回", "")}回　{row.get("放送内容", "")}',
+                        })
+                else:
+                    pair_detail_rows.extend({
+                        "種類": "シャニラジ",
+                        "日時": "",
+                        "番組・回": f"第{episode}回",
+                    } for episode in radio_pair_episodes)
+            for _, row in broadcast_pair_df.iterrows():
+                pair_detail_rows.append({
+                    "種類": str(row.get("分類", "公式番組・生配信")),
+                    "日時": row.get("初回放送", ""),
+                    "番組・回": row.get("放送内容", ""),
+                })
+            for _, row in commentary_pair_df.iterrows():
+                pair_detail_rows.append({
+                    "種類": f'オーディオコメンタリー（{row.get("種別", "")}）',
+                    "日時": "",
+                    "番組・回": row.get("公演略称", ""),
+                })
+            if pair_detail_rows:
+                pair_detail_df = pd.DataFrame(pair_detail_rows)
+                pair_detail_df["_日時_sort"] = pd.to_datetime(
+                    pair_detail_df["日時"].astype(str).str.replace(r"\([^)]*\)", "", regex=True),
+                    errors="coerce",
+                )
+                # 共演の詳細は、種類ごとにまとめてから時系列順に確認する。
+                pair_detail_df = pair_detail_df.sort_values(
+                    ["種類", "_日時_sort", "番組・回"],
+                    ascending=[True, True, True],
+                    kind="stable",
+                ).drop(columns="_日時_sort")
+                with st.expander(f"{first_pair_cast}さん × {second_pair_cast}さんの共演回を表示"):
+                    st.dataframe(
+                        pair_detail_df,
+                        use_container_width=True,
+                        hide_index=True,
+                        column_config={
+                            "番組・回": st.column_config.TextColumn("番組・回", width="large"),
+                        },
+                    )
+            else:
+                st.info("現在の登録データでは、この2人の共演回はありません。")
+        else:
+            st.caption("出演者データを追加すると、キャスト同士の共演回数を確認できます。")
+        st.markdown("---")
+
         if not radio_appearance_df.empty:
             st.subheader("📻 シャニラジ出演履歴")
+            st.caption("公式配信URLやYouTube切り抜きが登録されている回は、そのままアーカイブを開けます。")
             radio_count_df = (
                 radio_appearance_df["キャスト"].value_counts().rename_axis("キャスト")
                 .reset_index(name="出演回数")
@@ -8711,7 +9098,7 @@ if os.path.exists(SETLIST_FILE):
                         value=False,
                         key="radio_archives_only",
                     )
-                    # 文字列順ではなく、放送回の順に並べる。
+                    # 「1, 101, 107, 13」のような文字列順ではなく、放送回の順に並べる。
                     selected_radio_detail_df["_出演回数_sort"] = pd.to_numeric(
                         selected_radio_detail_df["出演回"], errors="coerce"
                     )
@@ -8726,7 +9113,7 @@ if os.path.exists(SETLIST_FILE):
                             on="出演回",
                             how="left",
                         )
-                    # 公式ページを優先し、なければ切り抜きへ。表では入口を1つにする。
+                    # 公式ページを優先し、なければ切り抜きへ。表では入口を1つにして迷わせない。
                     official_archive = selected_radio_detail_df.get(
                         "公式配信URL", pd.Series("", index=selected_radio_detail_df.index)
                     ).astype(str)
@@ -8771,8 +9158,18 @@ if os.path.exists(SETLIST_FILE):
             if "分類" not in display_broadcast_df.columns:
                 display_broadcast_df["分類"] = "未分類"
             display_broadcast_df["分類"] = display_broadcast_df["分類"].replace("", "未分類").fillna("未分類")
+            # 複合する配信区分は1つのラベルとして表示する。
+            # 読点だと別々の区分に見えるため、中黒に統一する。
+            display_broadcast_df["分類"] = display_broadcast_df["分類"].astype(str).str.replace(
+                r"[,，、]+", "・", regex=True
+            )
+            # 全番組の一覧は種類を問わず時系列順に確認できるようにする。
             if "初回放送_dt" in display_broadcast_df.columns:
-                display_broadcast_df = display_broadcast_df.sort_values("初回放送_dt", ascending=False)
+                display_broadcast_df = display_broadcast_df.sort_values(
+                    "初回放送_dt",
+                    ascending=True,
+                    kind="stable",
+                )
 
             # 正式名はデータとして保持し、一覧だけ必要に応じて短く表示する。
             # 「アイドルマスター シャイニーカラーズ生配信」のような長い番組名を
